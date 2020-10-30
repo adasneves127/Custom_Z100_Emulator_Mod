@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated with glade 3.22.1 -->
+<interface>
+  <requires lib="gtk+" version="3.20"/>
+  <object class="GtkWindow" id="main_window">
+    <property name="can_focus">False</property>
+    <property name="title" translatable="yes">JZ-100 Debug Window</property>
+    <property name="resizable">False</property>
+    <property name="default_width">800</property>
+    <property name="default_height">500</property>
+    <child>
+      <placeholder/>
+    </child>
+    <child>
+      <object class="GtkFixed" id="fixed_window_grid">
+        <property name="visible">True</property>
+        <property name="can_focus">False</property>
+        <child>
+          <object class="GtkLabel" id="reg_B_8085_label">
+            <property name="name">reg_B_8085</property>
+            <property name="width_request">15</property>
+            <property name="height_request">15</property>
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="label" translatable="yes">B</property>
+          </object>
+          <packing>
+            <property name="x">82</property>
+            <property name="y">42</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkTextView" id="reg_B_8085_val">
+            <property name="width_request">57</property>
+            <property name="height_request">25</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="editable">False</property>
+            <property name="cursor_visible">False</property>
+            <property name="accepts_tab">False</property>
+          </object>
+          <packing>
+            <property name="x">104</property>
+            <property name="y">38</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="title_label_8085">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="label" translatable="yes">8085 Processor</property>
+          </object>
+          <packing>
+            <property name="x">222</property>
+            <property name="y">11</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="reg_B_8085_value_0">
+            <property name="width_request">100</property>
+            <property name="height_request">80</property>
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <attributes>
+              <attribute name="background" value="#fcfce9e94f4f"/>
+            </attributes>
+          </object>
+          <packing>
+            <property name="x">113</property>
+            <property name="y">84</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkButton" id="step_button">
+            <property name="label" translatable="yes">Step</property>
+            <property name="width_request">79</property>
+            <property name="height_request">24</property>
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="receives_default">True</property>
+            <signal name="clicked" handler="on_step_button_clicked" swapped="no"/>
+          </object>
+          <packing>
+            <property name="x">140</property>
+            <property name="y">250</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+  </object>
+</interface>
