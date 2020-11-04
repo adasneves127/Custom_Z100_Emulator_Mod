@@ -207,6 +207,23 @@ void writeWD1797(WD1797* w,unsigned int addr,unsigned int value)
 			w->override8=(value>>5)&1;
 			w->waitState=(value>>6)&1;
 			w->singleDensity=(value>>7)&1;
+			// print contol latch values
+			printf("wd1797 control latch value: %d\n"
+				"drive select: %d\n"
+				"drive type: %d\n"
+				"select drives: %d\n"
+				"precomp: %d\n"
+				"override 8: %d\n"
+				"wait state: %d\n"
+				"single density: %d\n",
+				w->controlLatchValue,
+			 	w->driveSelect,
+				w->driveType,
+				w->selectDrives,
+				w->precomp,
+				w->override8,
+				w->waitState,
+				w->singleDensity);
 			break;
 	}
 }
@@ -433,12 +450,29 @@ void doWD1797Command(WD1797* w)
 {
 	w->commandDone=0;
 
-	int rates[]={3,6,10,15};
+	// int rates[]={3,6,10,15};
+	/* this change according to page D.191 of the Z-100 Technical - Table 3
+	 	STEPPING RATES. The ROM Listing version 2.5 states that T1F_5SR Flag,
+		which is 0b0000 0011, corresponds to 30 msec/track. Table 3 lists this
+		setting as being assciated with a 1 MHz clock */
+	int rates[]={6,12,20,30};
 
 	int rate = rates[w->command & 3];
 	int hld=(w->command&8)==8;
 	int verify=(w->command&4)==4;
 	int updateReg=(w->command&16)==16;
+
+	printf("command: %d\n"
+		"rate: %d\n"
+		"head load: %d\n"
+		"verify: %d\n"
+		"updateReg: %d\n",
+		w->command,
+		rate,
+		hld,
+		verify,
+		updateReg);
+
 
 	printf("command: %x\n",w->command);
 
@@ -456,6 +490,10 @@ void doWD1797Command(WD1797* w)
 		w->commandName=RESTORECOMMAND;
 		w->commandType=1;
 		w->us=0;
+
+		// according to page D.191
+		printf("setting slave IRQ0\n");
+		e8259_set_irq0 (e8259_slave, 1);
 	}
 	//seek
 	else if ((w->command>>4)==1)

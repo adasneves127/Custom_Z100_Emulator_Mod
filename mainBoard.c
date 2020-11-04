@@ -162,6 +162,7 @@ int z100_main() {
   e8253_set_gate(e8253, 0, 1);
   e8253_set_gate(e8253, 1, 1);
   e8253_set_gate(e8253, 2, 1);
+	// set OUT 0 and OUT 2 functions to triggar IRQ2 on the master PIC
   e8253_set_out_fct(e8253, 0, e8259_master, e8259_set_irq2);
   e8253_set_out_fct(e8253, 2, e8259_master, e8259_set_irq2);
   e8253_set_out_fct(e8253, 1, timer_ext_1, timer_out_1);
@@ -343,9 +344,10 @@ void interruptFunctionCall(void* v, int number) {
 }
 
 void cascadeInterruptFunctionCall(void* v, int number) {
-  if(number == 0) {
-    return;
-  }
+  // if(number == 0) {
+  //   return;
+  // }
+	printf("SLAVE 8253 PIC INT SIGNAL\n");
   e8259_set_irq3(e8259_master, 1);
 }
 
