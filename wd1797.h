@@ -11,6 +11,11 @@ typedef struct
 	int stepDir;
 	double indexTime;
 	int index;
+	int indexHoleDetect;	// when this is 1, index hole is being detected
+	int indexHoleTime;	/* this will keep track of how long the index hole is
+											 detected for. According to page D.203 of Z-100 technical
+											 Manual - Appendices, Misc. Timings, the index pulse
+											 width is at least 20 microseconds with a 1 MHz clock */
 
 	int commandType;
 	int commandName;
@@ -96,4 +101,3 @@ void writeWD1797(WD1797*,unsigned int addr,unsigned int value);
 unsigned int readWD1797(WD1797*,unsigned int addr);
 void doWD1797Cycle(WD1797*, double cycles);
 void doWD1797Command(WD1797*);
-

@@ -1,7 +1,7 @@
 //utility functions
 #include <stdio.h>
 
-// this is a helper function to display numbrs in binary format
+// this is a helper function to display numbers in binary format
 void print_bin8_representation(unsigned char val) {
   for(int i=7; i>=0; i--)  {
     printf("%d",(val>>i)&1);

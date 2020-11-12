@@ -61,6 +61,9 @@ typedef void (*e8259_irq_f) (struct e8259_s *pic, unsigned char val);
 
 
 typedef struct e8259_s {
+	/* label (MASTER or SLAVE) */
+	char* label;
+
 	/* initialization control words */
 	unsigned char icw[4];
 
@@ -108,7 +111,7 @@ typedef struct e8259_s {
  * @short Initialize a PIC 8259 structure
  * @param pic The PIC 8259 structure
  *****************************************************************************/
-void e8259_init (e8259_t *pic);
+void e8259_init (e8259_t *pic, char* lbl);
 
 /*!***************************************************************************
  * @short  Create and initialize a PIC 8259 structure

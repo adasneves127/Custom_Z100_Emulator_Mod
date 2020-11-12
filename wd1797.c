@@ -234,6 +234,7 @@ int commandStep(WD1797* w, double us)
 	//restore
 	if(w->commandName==RESTORECOMMAND)
 	{
+		// printf("doing RESTORE command step...\n");
 		w->us+=us;
 		if(w->track!=0)
 		{
@@ -327,42 +328,42 @@ int commandStep(WD1797* w, double us)
 		// %%%%%% WHY RETURN 0 HERE???? &&& instead of 1 like before&&&&&
 		return 0;
 /*
-           var numSectors = _w.Disk.GetNumSectors(_updateSSO ? 1 : 0, _w.Track);
+	   var numSectors = _w.Disk.GetNumSectors(_updateSSO ? 1 : 0, _w.Track);
 
-            if (_w.Sector > numSectors)
-            {
-                _w.RecordNotFound = true;
-                _w.Interrupt();
-                return true;
-            }
-            var cylinder = _w.Track;
-            var head = _updateSSO ? 1 : 0;
-            var sector = _w.Sector;
+	    if (_w.Sector > numSectors)
+	    {
+	        _w.RecordNotFound = true;
+	        _w.Interrupt();
+	        return true;
+	    }
+	    var cylinder = _w.Track;
+	    var head = _updateSSO ? 1 : 0;
+	    var sector = _w.Sector;
 
-            if (!_w.StatusPort.Ready)
-            {
-                _w.Data = _w.Disk.Get(cylinder, head, sector, _sectorIdx);
-                _w.StatusPort.Ready = true;
-                _sectorIdx++;
-            }
+	    if (!_w.StatusPort.Ready)
+	    {
+	        _w.Data = _w.Disk.Get(cylinder, head, sector, _sectorIdx);
+	        _w.StatusPort.Ready = true;
+	        _sectorIdx++;
+	    }
 
-            if (_sectorIdx == _w.Disk.GetSectorSize(head, cylinder).Size)
-            {
-                if (_multipleRecords && _w.Sector <= numSectors)
-                {
-                    _w.Sector++;
-                    _sectorIdx = 0;
-                }
-                else
-                {
-                    if (_w.Disk.GetDeleted(cylinder, head, _w.Sector))
-                        _w.RecordType = true;
+	    if (_sectorIdx == _w.Disk.GetSectorSize(head, cylinder).Size)
+	    {
+	        if (_multipleRecords && _w.Sector <= numSectors)
+	        {
+	            _w.Sector++;
+	            _sectorIdx = 0;
+	        }
+	        else
+	        {
+	            if (_w.Disk.GetDeleted(cylinder, head, _w.Sector))
+	                _w.RecordType = true;
 
-                    _w.Interrupt();
-                    return true;
-                }
-            }
-            return false;
+	            _w.Interrupt();
+	            return true;
+	        }
+	    }
+	    return false;
 */
 		return 1;
 	}
@@ -371,6 +372,10 @@ int commandStep(WD1797* w, double us)
 
 void doWD1797Cycle(WD1797* w,double us)
 {
+
+	// ??
+	// w->us++;
+
 	w->indexTime+=us;
 	if(w->index && w->indexTime>=INDEX_MARK_TIME)
 	{
@@ -383,11 +388,13 @@ void doWD1797Cycle(WD1797* w,double us)
 		w->indexTime=0;
 	}
 	if(!w->commandDone)
+		// printf("COMMAND is not done...do command step\n");
 		w->commandDone=commandStep(w,us);
 
 	//restore, step, interrupt
 	if(w->commandType==1 || w->commandType==4)
 	{
+		// printf("setting status Register...\n");
 		w->status =
 			w->commandDone==1? 0:1 |
 			w->index? 2:0 |
@@ -466,7 +473,7 @@ void doWD1797Command(WD1797* w)
 		"rate: %d\n"
 		"head load: %d\n"
 		"verify: %d\n"
-		"updateReg: %d\n",
+		"updateReg: %d\n\n",
 		w->command,
 		rate,
 		hld,
@@ -474,11 +481,12 @@ void doWD1797Command(WD1797* w)
 		updateReg);
 
 
-	printf("command: %x\n",w->command);
+	// printf("command: %x\n",w->command);
 
 	//restore
 	if((w->command >> 4) == 0)
 	{
+		printf("RESTORE COMMAND executing...\n");
 		w->rate=rate;
 		if(!hld && !verify)
 			w->headLoad=0;
@@ -492,8 +500,8 @@ void doWD1797Command(WD1797* w)
 		w->us=0;
 
 		// according to page D.191
-		printf("setting slave IRQ0\n");
-		e8259_set_irq0 (e8259_slave, 1);
+		// printf("setting slave IRQ0\n");
+		// e8259_set_irq0 (e8259_slave, 1);
 	}
 	//seek
 	else if ((w->command>>4)==1)

@@ -24,10 +24,12 @@
 
 #define ROM_SIZE 0x4000
 #define RAM_SIZE 0x30000
-// 116736 cycles = 0.0233472 seconds
+// (116736 cycles = 0.0233472 seconds)
 // #define VSYNC_CYCLE_LIMIT 116736
-// 20 cycles = 4 microseconds
+// (20 cycles = 4 microseconds)
 // #define E8253_TIMER_CYCLE_LIMIT 20
+// (5 CPU cycles = 1 microsecond)
+// #define WD1797_CYCLE_LIMIT 5
 
 enum active_processor{pr8085, pr8088};
 enum active_processor active_processor;
@@ -37,6 +39,7 @@ unsigned long instructions_done;
 unsigned long breakAtInstruction;
 // unsigned int VSYNC_cycle_count;
 // unsigned int e8253_timer_cycle_count;
+// unsigned int wd1797_cycle_count;
 
 // debug window thread
 // pthread_t dbug_window_thread;
@@ -98,11 +101,13 @@ void timer_ext_2();
 int z100_main() {
   // temp hardcode debug mode flag
   // debug_mode = TRUE;
+
   // set instruction to break at for debugging
   /* (Instruction 1093881 is the jump back to the TESTK call after the TESTK
   routine has checked the keyboard status port one time while waiting at the
   hand prompt.) */
   // breakAtInstruction = 1093881;
+
   // *** set up all hardware conpoenets on the main board
   // initialize keyboard - create a keyboard object
 	keybrd = newKeyboard();
@@ -141,13 +146,11 @@ int z100_main() {
 	reset8088(p8088);
   printf("8088 reset\n");
   //create two interrupt controller objects "master" and "slave"
-		//need slave to 1. pass the self-test and 2. access floppies
-		//note: i'm not sure I got the slave right.
-    // Also, is there a dificientcy with cascading these interrrupt implementations?
+	//need slave to 1. pass the self-test and 2. access WD1797 floppy controller
 	e8259_master=e8259_new();
 	e8259_slave=e8259_new();
-	e8259_init(e8259_master);
-	e8259_init(e8259_slave);
+	e8259_init(e8259_master, "MASTER");
+	e8259_init(e8259_slave, "SLAVE_");
 	e8259_reset(e8259_master);
 	e8259_reset(e8259_slave);
   /* setup master int controller to cause 8088 interrupt on trap pin (connect interrupt
@@ -282,10 +285,31 @@ int z100_main() {
       e8259_set_irq6(e8259_master, 0);
     }
 
-    /* clock the 8253 timer - this should be ~ every 4 micro seconds
+    /* clock the 8253 timer - this should be ~ every 4 microseconds
      but here it happens on every instruction - although the number of cycles
      varies with each type of instruction */
     e8253_clock(e8253, 1);
+
+		/* clock the WD1797. The WD1797 is driven by a 1 MHz clock in the Z-100.
+			Thus, it should be clocked every 1 microsecond or every five CPU (5 MHz)
+			cycles. Considering it will be clocked after every instruction, it will
+			happen in the avarage of all instruction cycle lengths. */
+		doWD1797Cycle(wd1797, 1);
+		// DEBUG
+		if(debug_mode && instructions_done >= breakAtInstruction) {
+			// print index info
+			printf("\nWD1797 commandType: %d\n"
+				"us: %lf\n"
+				"indexTime: %lf\n"
+				"index: %d\n",
+				wd1797->commandType,
+				wd1797->us,
+				wd1797->indexTime,
+				wd1797->index);
+			// print WD1797 status register
+			print_bin8_representation(wd1797->status);
+    }
+
 
     // update the screen every 100,000 instructions
     if(instructions_done%100000 == 0) {
@@ -344,9 +368,9 @@ void interruptFunctionCall(void* v, int number) {
 }
 
 void cascadeInterruptFunctionCall(void* v, int number) {
-  // if(number == 0) {
-  //   return;
-  // }
+  if(number == 0) {
+    return;
+  }
 	printf("SLAVE 8253 PIC INT SIGNAL\n");
   e8259_set_irq3(e8259_master, 1);
 }

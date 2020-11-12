@@ -32,8 +32,11 @@
 #include "e8259.h"
 
 
-void e8259_init (e8259_t *pic)
+void e8259_init (e8259_t *pic, char* lbl)
 {
+	// assign PIC label - "MASTER" or "SLAVE"
+	pic->label=lbl;
+
 	unsigned i;
 
 	for (i = 0; i < 4; i++) {
@@ -78,7 +81,7 @@ e8259_t *e8259_new (void)
 		return (NULL);
 	}
 
-	e8259_init (pic);
+	e8259_init (pic, "______");
 
 	return (pic);
 }
@@ -138,16 +141,16 @@ void e8259_set_int_fct (e8259_t *pic, void *ext, void *fct)
 static
 void e8259_set_int (e8259_t *pic, unsigned char val)
 {
-	printf("Call e8259_set_int for slave PIC\n");
+	printf("Call e8259_set_int for %s PIC\n", pic->label);
 	printf("pointer to interrupt function: %p\n", pic->intr);
 	printf("incoming val: %X\n", val);
-	printf("pic->intr_val: %X\n", pic->intr_val);
+	printf("pic->intr_val: %X\n\n", pic->intr_val);
 
 	if (pic->intr_val != val) {
 		pic->intr_val = val;
 
 		if (pic->intr != NULL) {
-			printf("Call pic->intr slave PIC\n");
+			printf("Call pic->intr %s PIC\n", pic->label);
 			pic->intr (pic->intr_ext, val);
 		}
 	}
@@ -183,7 +186,7 @@ unsigned e8259_get_priority (e8259_t *pic, unsigned char val)
 static
 void e8259_check_int (e8259_t *pic)
 {
-	printf("Call e8259_check_int for slave PIC\n");
+	printf("Call e8259_check_int for %s PIC\n", pic->label);
 	unsigned irr, isr, msk;
 
 	irr = pic->irr & ~pic->imr;
@@ -217,7 +220,7 @@ void e8259_check_int (e8259_t *pic)
  */
 void e8259_set_irq (e8259_t *pic, unsigned irq, unsigned char val)
 {
-	printf("Call e8259_set_irq for slave PIC\n");
+	printf("Call e8259_set_irq for %s PIC\n", pic->label);
 	unsigned char msk;
 
 	msk = 0x01 << (irq & 0x07);
@@ -240,7 +243,7 @@ void e8259_set_irq (e8259_t *pic, unsigned irq, unsigned char val)
 
 void e8259_set_irq0 (e8259_t *pic, unsigned char val)
 {
-	printf("IRQ0 PIN\n");
+	printf("set %s IRQ0 PIN to %X\n", pic->label, val != 0);
 	e8259_set_irq (pic, 0, val != 0);
 }
 
@@ -256,7 +259,7 @@ void e8259_set_irq2 (e8259_t *pic, unsigned char val)
 
 void e8259_set_irq3 (e8259_t *pic, unsigned char val)
 {
-	printf("IRQ3 PIN\n");
+	printf("set %s IRQ3 PIN to %X\n", pic->label, val != 0);
 	e8259_set_irq (pic, 3, val != 0);
 }
 
@@ -272,7 +275,7 @@ void e8259_set_irq5 (e8259_t *pic, unsigned char val)
 
 void e8259_set_irq6 (e8259_t *pic, unsigned char val)
 {
-	printf("IRQ6 PIN\n");
+	printf("set %s IRQ6 PIN to %X\n", pic->label, val != 0);
 	e8259_set_irq (pic, 6, val != 0);
 }
 
@@ -330,14 +333,18 @@ unsigned char e8259_inta (e8259_t *master_pic, e8259_t *slave_pic)
 	e8259_check_int (master_pic);
 
 	// check if irrb == 3, the slave has caused the interrupt in master IR3.
-	if (irrb == 3) {
+	if (irrb == 3 && (master_pic->label == "MASTER")) {
 		// recursive call and return the interrupt vector from the slave PIC
-		// pass the slave PIC as the master
+		// pass the slave PIC as the master and return its vector
 		printf("Interrupt signal from SLAVE 8259 PIC on MASTER IRQ3\n");
-		return e8259_inta(slave_pic, NULL);
+		unsigned char slave_int_vector = e8259_inta(slave_pic, NULL);
+		printf("sent interrupt vector %X into data bus\n", slave_int_vector);
+		return slave_int_vector;
 	}
 	// otherwise, return the master PIC vector interrupt
-	return (master_pic->base + irrp);
+	unsigned char master_int_vector = (master_pic->base + irrp);
+	printf("sent interrupt vector %X into data bus\n", master_int_vector);
+	return master_int_vector;
 }
 
 unsigned char e8259_get_irr (e8259_t *pic)
