@@ -208,22 +208,22 @@ void writeWD1797(WD1797* w,unsigned int addr,unsigned int value)
 			w->waitState=(value>>6)&1;
 			w->singleDensity=(value>>7)&1;
 			// print contol latch values
-			printf("wd1797 control latch value: %d\n"
-				"drive select: %d\n"
-				"drive type: %d\n"
-				"select drives: %d\n"
-				"precomp: %d\n"
-				"override 8: %d\n"
-				"wait state: %d\n"
-				"single density: %d\n",
-				w->controlLatchValue,
-			 	w->driveSelect,
-				w->driveType,
-				w->selectDrives,
-				w->precomp,
-				w->override8,
-				w->waitState,
-				w->singleDensity);
+			// printf("wd1797 control latch value: %d\n"
+			// 	"drive select: %d\n"
+			// 	"drive type: %d\n"
+			// 	"select drives: %d\n"
+			// 	"precomp: %d\n"
+			// 	"override 8: %d\n"
+			// 	"wait state: %d\n"
+			// 	"single density: %d\n",
+			// 	w->controlLatchValue,
+			//  	w->driveSelect,
+			// 	w->driveType,
+			// 	w->selectDrives,
+			// 	w->precomp,
+			// 	w->override8,
+			// 	w->waitState,
+			// 	w->singleDensity);
 			break;
 	}
 }
@@ -469,16 +469,16 @@ void doWD1797Command(WD1797* w)
 	int verify=(w->command&4)==4;
 	int updateReg=(w->command&16)==16;
 
-	printf("command: %d\n"
-		"rate: %d\n"
-		"head load: %d\n"
-		"verify: %d\n"
-		"updateReg: %d\n\n",
-		w->command,
-		rate,
-		hld,
-		verify,
-		updateReg);
+	// printf("command: %d\n"
+	// 	"rate: %d\n"
+	// 	"head load: %d\n"
+	// 	"verify: %d\n"
+	// 	"updateReg: %d\n\n",
+	// 	w->command,
+	// 	rate,
+	// 	hld,
+	// 	verify,
+	// 	updateReg);
 
 
 	// printf("command: %x\n",w->command);

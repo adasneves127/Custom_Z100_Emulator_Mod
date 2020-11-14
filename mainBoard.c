@@ -34,6 +34,9 @@
 enum active_processor{pr8085, pr8088};
 enum active_processor active_processor;
 
+// for determing average cycles per instruction
+double total_cycles;
+
 unsigned long instructions_done;
 // unsigned long cycles_done;
 unsigned long breakAtInstruction;
@@ -189,6 +192,7 @@ int z100_main() {
   // VSYNC_cycle_count = 0;
   // e8253_timer_cycle_count = 0;
   // reset_irq6 = false;
+	total_cycles = 0.0;
 
   // ==== RUN THE PROCESSORS ====
   printf("Start running processors..\n");
@@ -239,7 +243,10 @@ int z100_main() {
         printf("trap = %X, int = %X, dir = %X, overflow = %X\n",
           p8088->t,p8088->i,p8088->d,p8088->o);
         }
-    }
+
+				// add the number of cycles the last instruction took to the total cycles
+				total_cycles += p8088->cycles;
+		}
     // printf("\n");
 
     /* THIS IS A BETTER WAY TO TIME THE INTERRUPT
@@ -285,6 +292,8 @@ int z100_main() {
       e8259_set_irq6(e8259_master, 0);
     }
 
+		// *** ON AVERAGE 2.284 microseconds pass with each instruction executed
+
     /* clock the 8253 timer - this should be ~ every 4 microseconds
      but here it happens on every instruction - although the number of cycles
      varies with each type of instruction */
@@ -295,20 +304,21 @@ int z100_main() {
 			cycles. Considering it will be clocked after every instruction, it will
 			happen in the avarage of all instruction cycle lengths. */
 		doWD1797Cycle(wd1797, 1);
+
 		// DEBUG
-		if(debug_mode && instructions_done >= breakAtInstruction) {
+		// if(debug_mode && instructions_done >= breakAtInstruction) {
 			// print index info
-			printf("\nWD1797 commandType: %d\n"
-				"us: %lf\n"
-				"indexTime: %lf\n"
-				"index: %d\n",
-				wd1797->commandType,
-				wd1797->us,
-				wd1797->indexTime,
-				wd1797->index);
-			// print WD1797 status register
-			print_bin8_representation(wd1797->status);
-    }
+			// printf("\nWD1797 commandType: %d\n"
+			// 	"us: %lf\n"
+			// 	"indexTime: %lf\n"
+			// 	"index: %d\n",
+			// 	wd1797->commandType,
+			// 	wd1797->us,
+			// 	wd1797->indexTime,
+			// 	wd1797->index);
+			// // print WD1797 status register
+			// print_bin8_representation(wd1797->status);
+    // }
 
 
     // update the screen every 100,000 instructions
@@ -349,6 +359,7 @@ int z100_main() {
     instruction */
     if(debug_mode && instructions_done >= breakAtInstruction) {
       // printf("\n");
+			printf("Average cycles/instruction: %f\n", (total_cycles/instructions_done));
       getchar();
     }
   }
@@ -371,7 +382,7 @@ void cascadeInterruptFunctionCall(void* v, int number) {
   if(number == 0) {
     return;
   }
-	printf("SLAVE 8253 PIC INT SIGNAL\n");
+	printf("SLAVE 8259 PIC INT SIGNAL to MASTER 8259 PIC IRQ3\n");
   e8259_set_irq3(e8259_master, 1);
 }
 

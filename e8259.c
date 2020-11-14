@@ -146,6 +146,8 @@ void e8259_set_int (e8259_t *pic, unsigned char val)
 	printf("incoming val: %X\n", val);
 	printf("pic->intr_val: %X\n\n", pic->intr_val);
 
+	// pic->intr_val = 0 and val = 0 - so 0x00 != 0x00 = 0
+	// this will not execute
 	if (pic->intr_val != val) {
 		pic->intr_val = val;
 
@@ -189,8 +191,10 @@ void e8259_check_int (e8259_t *pic)
 	printf("Call e8259_check_int for %s PIC\n", pic->label);
 	unsigned irr, isr, msk;
 
+	// irr = 0x01 & ~0xFF (0x00) = 0x00
 	irr = pic->irr & ~pic->imr;
 
+	// irr does = 0
 	if (irr == 0) {
 		e8259_set_int (pic, 0);
 		return;
@@ -221,16 +225,25 @@ void e8259_check_int (e8259_t *pic)
 void e8259_set_irq (e8259_t *pic, unsigned irq, unsigned char val)
 {
 	printf("Call e8259_set_irq for %s PIC\n", pic->label);
-	unsigned char msk;
 
+	unsigned char msk;
+	// msk will equal -- 0b0000 0001 << (0b0000 0000 & 0b0000 0111)
+	// = 0b0000 0001
 	msk = 0x01 << (irq & 0x07);
 
+	// pic->irq_inp = 0x00 from init.
+	// msk = 0x01
+	// pic->irq_inp & msk = 0x00 & 0x01 = 0x00
+	// 0 == 1 --> no return here
 	if (((pic->irq_inp & msk) != 0) == (val != 0)) {
 		return;
 	}
 
+	// val = 1
 	if (val) {
+		// pic->irq_inp = 0x00 | 0x01 = 0x01
 		pic->irq_inp |= msk;
+		// pic->irr = 0x00 | 0x01 = 0x01
 		pic->irr |= msk;
 	}
 	else {
@@ -254,6 +267,7 @@ void e8259_set_irq1 (e8259_t *pic, unsigned char val)
 
 void e8259_set_irq2 (e8259_t *pic, unsigned char val)
 {
+	printf("set %s IRQ2 PIN to %X\n", pic->label, val != 0);
 	e8259_set_irq (pic, 2, val != 0);
 }
 
@@ -290,6 +304,9 @@ void e8259_set_irq7 (e8259_t *pic, unsigned char val)
  */
 unsigned char e8259_inta (e8259_t *master_pic, e8259_t *slave_pic)
 {
+
+	printf("Call e8259_inta for %s PIC\n", master_pic->label);
+
 	unsigned      irrp;
 	unsigned char irrb;
 
@@ -338,12 +355,12 @@ unsigned char e8259_inta (e8259_t *master_pic, e8259_t *slave_pic)
 		// pass the slave PIC as the master and return its vector
 		printf("Interrupt signal from SLAVE 8259 PIC on MASTER IRQ3\n");
 		unsigned char slave_int_vector = e8259_inta(slave_pic, NULL);
-		printf("sent interrupt vector %X into data bus\n", slave_int_vector);
+		printf("sent interrupt vector %d into data bus\n", slave_int_vector);
 		return slave_int_vector;
 	}
 	// otherwise, return the master PIC vector interrupt
 	unsigned char master_int_vector = (master_pic->base + irrp);
-	printf("sent interrupt vector %X into data bus\n", master_int_vector);
+	printf("sent interrupt vector %d into data bus\n", master_int_vector);
 	return master_int_vector;
 }
 
