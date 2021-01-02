@@ -43,6 +43,8 @@ unsigned long breakAtInstruction;
 // unsigned int VSYNC_cycle_count;
 // unsigned int e8253_timer_cycle_count;
 // unsigned int wd1797_cycle_count;
+int last_instruction_cycles;
+double last_instruction_time_us;
 
 // debug window thread
 // pthread_t dbug_window_thread;
@@ -191,8 +193,10 @@ int z100_main() {
   // cycles_done = 0;
   // VSYNC_cycle_count = 0;
   // e8253_timer_cycle_count = 0;
-  // reset_irq6 = false;
 	total_cycles = 0.0;
+	last_instruction_cycles = 0;
+	last_instruction_time_us = 0.0;
+	// reset_irq6 = false;
 
   // ==== RUN THE PROCESSORS ====
   printf("Start running processors..\n");
@@ -203,6 +207,7 @@ int z100_main() {
     // if active processor is the 8085
     if(active_processor == pr8085) {
       doInstruction8085(&p8085);
+			last_instruction_cycles = p8085.cycles;
       instructions_done++;
       printf("instructions done: %ld\n", instructions_done);
       printf("PC = %X, opcode = %X, inst = %s\n",p8085.PC,p8085.opcode,p8085.name);
@@ -218,6 +223,7 @@ int z100_main() {
     // if the active processor is the 8088
     else if(active_processor == pr8088) {
       doInstruction8088(p8088);
+			last_instruction_cycles = p8088->cycles;
       instructions_done++;
       /* increment cycles_done to add the number of cycles the current
       instruction took */
@@ -299,11 +305,17 @@ int z100_main() {
      varies with each type of instruction */
     e8253_clock(e8253, 1);
 
-		/* clock the WD1797. The WD1797 is driven by a 1 MHz clock in the Z-100.
-			Thus, it should be clocked every 1 microsecond or every five CPU (5 MHz)
-			cycles. Considering it will be clocked after every instruction, it will
-			happen in the avarage of all instruction cycle lengths. */
-		doWD1797Cycle(wd1797, 1);
+		/* cycle the WD1797. The WD1797 is driven by a 1 MHz clock in the Z-100.
+			Thus, it should be cycled every 1 microsecond or every five CPU (5 MHz)
+			cycles. Considering it will be cycled after every instruction, the time
+			added to the internal WD1797 timer mechanisms will be determined
+			based on how many cycles the previous instruction took.
+			*/
+		// calculate time passed with the last instruction execution
+		// number of cycles for last instruction * 0.2 microseconds (5 MHz clock)
+		last_instruction_time_us = last_instruction_cycles * 0.2;
+		printf("%s%f\n", "last instrcution time (microseconds): ", last_instruction_time_us);
+		doWD1797Cycle(wd1797, last_instruction_time_us);
 
 		// DEBUG
 		// if(debug_mode && instructions_done >= breakAtInstruction) {
