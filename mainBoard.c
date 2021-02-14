@@ -15,7 +15,7 @@
 #include "8088.h"
 #include "e8253.h"
 #include "e8259.h"
-#include "wd1797.h"
+#include "jwd1797.h"
 #include "mainBoard.h"
 #include "keyboard.h"
 #include "video.h"
@@ -26,23 +26,27 @@
 #define RAM_SIZE 0x30000
 // (116736 cycles = 0.0233472 seconds)
 // #define VSYNC_CYCLE_LIMIT 116736
-// (20 cycles = 4 microseconds)
-// #define E8253_TIMER_CYCLE_LIMIT 20
+/* (20 cycles = 4 microseconds, EDIT - 8253 timer is connected to a 250kHz
+	clock according to page 2.80 Z-100 Technical manual (hardware) - clocked
+	every 120 cycles */
+#define E8253_TIMER_CYCLE_LIMIT 120
 // (5 CPU cycles = 1 microsecond)
-// #define WD1797_CYCLE_LIMIT 5
+// #define JWD1797_CYCLE_LIMIT 5
 
 enum active_processor{pr8085, pr8088};
 enum active_processor active_processor;
 
 // for determing average cycles per instruction
 double total_cycles;
+// rough clock to keep track of time passing (us) as instructions are executed
+double total_time_elapsed;
 
 unsigned long instructions_done;
 // unsigned long cycles_done;
 unsigned long breakAtInstruction;
 // unsigned int VSYNC_cycle_count;
-// unsigned int e8253_timer_cycle_count;
-// unsigned int wd1797_cycle_count;
+unsigned int e8253_timer_cycle_count;
+// unsigned int jwd1797_cycle_count;
 int last_instruction_cycles;
 double last_instruction_time_us;
 
@@ -80,7 +84,7 @@ unsigned int* pixels;	// holds the state of each pixel on the screen
 e8253_t* e8253;
 e8259_t* e8259_master;
 e8259_t* e8259_slave;
-WD1797* wd1797;
+JWD1797* jwd1797;
 
 int z100_main();
 void interruptFunctionCall(void*, int);
@@ -151,7 +155,7 @@ int z100_main() {
 	reset8088(p8088);
   printf("8088 reset\n");
   //create two interrupt controller objects "master" and "slave"
-	//need slave to 1. pass the self-test and 2. access WD1797 floppy controller
+	//need slave to 1. pass the self-test and 2. access JWD1797 floppy controller
 	e8259_master=e8259_new();
 	e8259_slave=e8259_new();
 	e8259_init(e8259_master, "MASTER");
@@ -176,8 +180,8 @@ int z100_main() {
   e8253_set_out_fct(e8253, 1, timer_ext_1, timer_out_1);
 
   // set up floppy controller object
-  wd1797 = newWD1797();
-  resetWD1797(wd1797);
+  jwd1797 = newJWD1797();
+  resetJWD1797(jwd1797);
 
   // this creates a thread running from the debug window function
   // pthread_create(&dbug_window_thread, NULL, run_debug_window, NULL);
@@ -192,8 +196,9 @@ int z100_main() {
   instructions_done = 0;
   // cycles_done = 0;
   // VSYNC_cycle_count = 0;
-  // e8253_timer_cycle_count = 0;
+  e8253_timer_cycle_count = 0;
 	total_cycles = 0.0;
+	total_time_elapsed = 0.0;
 	last_instruction_cycles = 0;
 	last_instruction_time_us = 0.0;
 	// reset_irq6 = false;
@@ -302,34 +307,45 @@ int z100_main() {
 
     /* clock the 8253 timer - this should be ~ every 4 microseconds
      but here it happens on every instruction - although the number of cycles
-     varies with each type of instruction */
-    e8253_clock(e8253, 1);
+     varies with each type of instruction  - EDIT: change clock cycle of timer
+		 to clock every 20 cycles ~ (4us at 5MHz)
+		 EDIT 2 - according to page 2.80 of Z-100 technical manual, the timer is
+		 clocked by a 250kHz clock. */
+		// update timer cycle count
+		e8253_timer_cycle_count += last_instruction_cycles;
+		if(e8253_timer_cycle_count >= E8253_TIMER_CYCLE_LIMIT) {
+			e8253_clock(e8253, 1);
+			e8253_timer_cycle_count = 0;
+		}
 
-		/* cycle the WD1797. The WD1797 is driven by a 1 MHz clock in the Z-100.
+
+		/* cycle the JWD1797. The JWD1797 is driven by a 1 MHz clock in the Z-100.
 			Thus, it should be cycled every 1 microsecond or every five CPU (5 MHz)
 			cycles. Considering it will be cycled after every instruction, the time
-			added to the internal WD1797 timer mechanisms will be determined
+			added to the internal JWD1797 timer mechanisms will be determined
 			based on how many cycles the previous instruction took.
 			*/
 		// calculate time passed with the last instruction execution
 		// number of cycles for last instruction * 0.2 microseconds (5 MHz clock)
 		last_instruction_time_us = last_instruction_cycles * 0.2;
-		printf("%s%f\n", "last instrcution time (microseconds): ", last_instruction_time_us);
-		doWD1797Cycle(wd1797, last_instruction_time_us);
+		// increment the time total_time_elapsed based on the last instruction time
+		total_time_elapsed += last_instruction_time_us;
+		// printf("%s%f\n", "last instrcution time (microseconds): ", last_instruction_time_us);
+		doJWD1797Cycle(jwd1797, last_instruction_time_us);
 
 		// DEBUG
 		// if(debug_mode && instructions_done >= breakAtInstruction) {
 			// print index info
-			// printf("\nWD1797 commandType: %d\n"
+			// printf("\nJWD1797 commandType: %d\n"
 			// 	"us: %lf\n"
 			// 	"indexTime: %lf\n"
 			// 	"index: %d\n",
-			// 	wd1797->commandType,
-			// 	wd1797->us,
-			// 	wd1797->indexTime,
-			// 	wd1797->index);
-			// // print WD1797 status register
-			// print_bin8_representation(wd1797->status);
+			// 	jwd1797->commandType,
+			// 	jwd1797->us,
+			// 	jwd1797->indexTime,
+			// 	jwd1797->index);
+			// // print JWD1797 status register
+			// print_bin8_representation(jwd1797->status);
     // }
 
 
@@ -369,9 +385,14 @@ int z100_main() {
 
     /* if debug mode is active, wait for enter key to continue after each
     instruction */
-    if(debug_mode && instructions_done >= breakAtInstruction) {
+    // if(debug_mode && ((instructions_done >= breakAtInstruction) || p8088->IP == 0x2FFC)) {
+		if(debug_mode && (instructions_done >= breakAtInstruction)) {
       // printf("\n");
+			printf("instructions done: %ld\n", instructions_done);
 			printf("Average cycles/instruction: %f\n", (total_cycles/instructions_done));
+			printf("TIME ELAPSED: %f\n", total_time_elapsed);
+			printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
+				jwd1797->rotational_byte_pointer);
       getchar();
     }
   }
@@ -525,37 +546,37 @@ unsigned int z100_port_read(unsigned int address) {
       // Z-207 Primary Floppy Drive Controller Status Port
       printf("reading from Z-207 Primary Floppy Drive Controller Status Port %X\n",
         address);
-      return_value = readWD1797(wd1797, address);
+      return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB1:
       // Z-207 Primary Floppy Drive Controller Track Port
       printf("reading from Z-207 Primary Floppy Drive Controller Track Port %X\n",
         address);
-      return_value = readWD1797(wd1797, address);
+      return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB2:
       // Z-207 Primary Floppy Drive Controller Sector Port
       printf("reading from Z-207 Primary Floppy Drive Controller Sector Port %X\n",
         address);
-      return_value = readWD1797(wd1797, address);
+      return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB3:
       // Z-207 Primary Floppy Drive Controller Data Port
       printf("reading from Z-207 Primary Floppy Drive Controller Data Port %X\n",
         address);
-      return_value = readWD1797(wd1797, address);
+      return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB4:
       // Z-207 Primary Floppy Drive Controller CNTRL Control Port
       printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
         address);
-      return_value = readWD1797(wd1797, address);
+      return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB5:
       // Z-207 Primary Floppy Drive Controller CNTRL Status Port
       printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
         address);
-      return_value = readWD1797(wd1797, address);
+      return_value = readJWD1797(jwd1797, address);
       break;
     // Video Commands - 68A21 parallel port
     case 0xD8:
@@ -724,37 +745,37 @@ void z100_port_write(unsigned int address, unsigned char data) {
       // Z-207 Primary Floppy Drive Controller Command Port
       printf("writing %X to Z-207 Primary Floppy Drive Controller Command Port %X\n",
         data, address);
-      writeWD1797(wd1797, address, data&0xff);
+      writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB1:
       // Z-207 Primary Floppy Drive Controller Track Port
       printf("writing %X to Z-207 Primary Floppy Drive Controller Track Port %X\n",
         data, address);
-      writeWD1797(wd1797, address, data&0xff);
+      writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB2:
       // Z-207 Primary Floppy Drive Controller Sector Port
       printf("writing %X to Z-207 Primary Floppy Drive Controller Sector Port %X\n",
         data, address);
-      writeWD1797(wd1797, address, data&0xff);
+      writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB3:
       // Z-207 Primary Floppy Drive Controller Data Port
       printf("writing %X to Z-207 Primary Floppy Drive Controller Data Port %X\n",
         data, address);
-      writeWD1797(wd1797, address, data&0xff);
+      writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB4:
       // Z-207 Primary Floppy Drive Controller CNTRL Control Port
       printf("writing %X to Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
         data, address);
-      writeWD1797(wd1797, address, data&0xff);
+      writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB5:
       // Z-207 Primary Floppy Drive Controller CNTRL Status Port
       printf("writing %X to Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
         data, address);
-      writeWD1797(wd1797, address, data&0xff);
+      writeJWD1797(jwd1797, address, data&0xff);
       break;
     // Video Commands - 68A21 parallel port
     case 0xD8:
