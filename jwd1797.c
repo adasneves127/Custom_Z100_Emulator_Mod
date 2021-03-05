@@ -23,7 +23,8 @@
 // an index hole is encountered every 0.2 seconds with a 300 RPM drive
 // #define INDEX_HOLE_ENCOUNTER_US 200000
 // index hole pulses should last for a minimum of 20 microseconds (WD1797 docs)
-#define INDEX_HOLE_PULSE_US 40.0
+// (was set to 40 us)
+#define INDEX_HOLE_PULSE_US 1000.0
 // when non-busy status and HLD high, reset HLD after 15 index pulses
 #define HLD_IDLE_INDEX_COUNT_LIMIT 15
 // head load timing (this can be set from 30-100 ms, depending on drive)
@@ -31,13 +32,14 @@
 #define HEAD_LOAD_TIMING_LIMIT 45.0*1000
 // verify time is 30 milliseconds for a 1MHz clock
 #define VERIFY_HEAD_SETTLING_LIMIT 30.0*1000
-// E (15 ms delay) for TYPE II and III commands (30 ms for 1 MHz clock)
-#define E_DELAY_LIMIT 30.0*1000
+// E (15 ms delay) for TYPE II and III commands (30 ms (30*1000 us) for 1 MHz clock)
+#define E_DELAY_LIMIT 500.0
 /* time limit for data shift register to assemble byte in data register
 	(simulated). This value is based on 'https://www.hp9845.net/9845/projects/fdio/#hp_formats'
 	where the 5.25" DS/DD disk is reported to have a 300 kbps data rate. */
 // #define ASSEMBLE_DATA_BYTE_LIMIT 26.67	// ~ 3.33375 us/bit
-#define ROTATIONAL_BYTE_READ_LIMIT 30.1	// ~ 3.9 us/bit
+// (was set to 30.1 us)
+#define ROTATIONAL_BYTE_READ_LIMIT 2	// ~ 3.9 us/bit
 /* number of bytes after ID field search encounters four 0x00 bytes. This
  	should be 16 bytes according to WD-1797 docs. After 16 bytes the search
 	for the next ID field starts over. */
@@ -269,6 +271,7 @@ unsigned int readJWD1797(JWD1797* jwd_controller, unsigned int port_addr) {
 			break;
 		// controller status port (read)
 		case 0xb5:
+			printf("reading from WD1797 control status port.. ** NOT IMPLEMENTED **\n");
 			break;
 		default:
 			printf("%X is an invalid port!\n", port_addr);
@@ -320,6 +323,7 @@ void writeJWD1797(JWD1797* jwd_controller, unsigned int port_addr, unsigned int 
 			break;
 		// control latch port
 		case 0xb4:
+			printf("Writing to WD1797 control port.. ** NOT IMPLEMENTED **\n");
 			break;
 		// controller status port
 		case 0xb5:

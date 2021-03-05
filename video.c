@@ -120,7 +120,8 @@ void renderScreen(Video* v, unsigned int* pixels) {
 					if(!v->redenabled) red=0;
 					int green = (v->vram[raw_addr+0x20000]>>bit)&1;
 					if(!v->greenenabled) green=0;
-					// flash enabled mode turns all pixel colors on
+					/* flash enabled mode turns all pixel colors on and ignores the
+					contents of VRAM */
 					if(v->flashenabled) { blue=0xff; red=0xff; green=0xff;}
 					// based on each pixel being a 0 or 1 (or 0xff in the case of flashenabled),
 					// set each color to an 8-bit value (either 0x00 or 0xff)

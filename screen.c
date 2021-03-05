@@ -17,7 +17,7 @@ extern keyboard* keybrd;
 //void renderScreen(Video*, unsigned int*);
 
 const int X_SCALE = 2;
-const int Y_SCALE = 3;
+const int Y_SCALE = 4;
 
 GtkWidget *window;
 GtkWidget *drawingArea;

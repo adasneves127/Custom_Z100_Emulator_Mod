@@ -63,17 +63,9 @@ bool reset_irq6;
 unsigned char user_debug_mode_choice;
 unsigned char switch_s101_FF;
 unsigned char processor_swap_port_FE;
-unsigned char high_address_latch_FD; // probably not needed
 unsigned char memory_control_latch_FC;
-unsigned char timer_status_port_FB;
 unsigned char io_diag_port_F6; // not needed without external diag device
-unsigned char keyboard_processor_port;
-unsigned char master_int_controller;
-unsigned char slave_int_controller;
-unsigned char timer;
-unsigned char crt_controller;
-unsigned char video_parallel_port;
-unsigned char primary_floppy_disk_controller;
+
 unsigned char rom[ROM_SIZE];
 unsigned char ram[RAM_SIZE];
 P8085 p8085;
@@ -393,8 +385,21 @@ int z100_main() {
 			printf("TIME ELAPSED: %f\n", total_time_elapsed);
 			printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
 				jwd1797->rotational_byte_pointer);
+			printf("%s%02X\n", "Current Byte: ", getFDiskByte(jwd1797));
+			printf("%s%f\n", "E Delay Timer: ", jwd1797->e_delay_timer);
+			printByteArray(jwd1797->id_field_data, 6);
       getchar();
     }
+
+		// if(p8088->IP == 0x3048) {
+		// 	printf("instructions done: %ld\n", instructions_done);
+		// 	printf("Average cycles/instruction: %f\n", (total_cycles/instructions_done));
+		// 	printf("TIME ELAPSED: %f\n", total_time_elapsed);
+		// 	printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
+		// 		jwd1797->rotational_byte_pointer);
+		// 	printByteArray(jwd1797->id_field_data, 6);
+    //   getchar();
+    // }
   }
   // return from MAIN
   return 0;
@@ -497,7 +502,6 @@ void z100_memory_write_(unsigned int addr, unsigned char data) {
   }
 	else if(addr >= 0xc0000 && addr <= 0xeffff) {
     // write data to video memeory portion of RAM at address
-
     // DEBUG message
     if(debug_mode && instructions_done >= breakAtInstruction) {
       printf("Writing to video memory...\n");
@@ -697,6 +701,11 @@ unsigned int z100_port_read(unsigned int address) {
       printf("reading from memory control latch port %X\n", address);
       return_value = memory_control_latch_FC;
       break;
+		case 0xFE:
+      // processor swap port FE;
+      printf("reading from processor swap port %X\n", address);
+      return_value = processor_swap_port_FE;
+      break;
     // S101 DIP Switch - (Page 2.8 in Z100 technical manual for pin defs)
     case 0xFF:
       printf("reading from DIP_switch_s101_FF port %X\n", address);
@@ -863,6 +872,7 @@ void z100_port_write(unsigned int address, unsigned char data) {
     // memory control latch port FC;
     case 0xFC:
       printf("writing %X to memory control latch port %X\n", data, address);
+			memory_control_latch_FC = data;
       /* extract bits 3 and 2 to determine which ROM memory configuration
        will be set */
       int bit2 = (data >> 2) & 0x01;
@@ -935,9 +945,9 @@ void z100_port_write(unsigned int address, unsigned char data) {
     // S101 DIP Switch - (Page 2.8 in Z100 technical manual for pin defs)
     // NOTE: since this is a PHYSICAL DIP switch - this case should never be called
     case 0xFF:
-      printf("Value %X written to DIP_switch_s101_FF port at address %X\n",
-      data, address);
-      switch_s101_FF = data;
+      printf("ERROR: CAN NOT WRITE to DIP_switch_s101_FF port at address %X\n",
+				address);
+      // switch_s101_FF = data;
       break;
     // unimplemented port
     default:
@@ -962,28 +972,10 @@ void initialize_z100_ports() {
   switch_s101_FF = 0b00000000;
   // processor swap ports
   processor_swap_port_FE = 0b00000000;
-  // high address latch
-  high_address_latch_FD = 0b00000000;
-  // memeory control latch
+	// memeory control latch
   memory_control_latch_FC = 0b00000000;
-  // timer status port (FB)
-  timer_status_port_FB = 0b00000000;
   // io_diag_port
   io_diag_port_F6 = 0b11111111;
-  // 8041A keyboard processor port (F4, F5)
-  keyboard_processor_port = 0b00000000;
-  // 8259A Master interrupt controller (F2, F3)
-  master_int_controller = 0b00000000;
-  // 8259A Slave interrupt controller (F0, F1)
-  slave_int_controller = 0b00000000;
-  // 8253 Timer (E4, E5, E6, E7)
-  timer = 0b00000000;
-  // 6845 CRT Contoller (DC, DD)
-  crt_controller = 0b00000000;
-  // 68A21 video parallel port (D8, D9, DA, DB)
-  video_parallel_port = 0b00000000;
-  // Primary floppy disk controller (B0-B7)
-  primary_floppy_disk_controller = 0b00000000;
 }
 
 // the timer functions below serve as stand-in functions
