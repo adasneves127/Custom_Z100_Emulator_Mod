@@ -3,7 +3,6 @@
 
 /* mainBoard.c */
 
-/* copyright/licensing */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -95,59 +94,51 @@ void timer_out_1();
 void timer_ext_1();
 void timer_out_2();
 void timer_ext_2();
-
 // static gboolean update_debug_gui_values();
 
 // ============== MAIN Z100 FUNCTION ==============
 int z100_main() {
-  // temp hardcode debug mode flag
-  // debug_mode = TRUE;
 
-  // set instruction to break at for debugging
-  /* (Instruction 1093881 is the jump back to the TESTK call after the TESTK
-  routine has checked the keyboard status port one time while waiting at the
-  hand prompt.) */
-  // breakAtInstruction = 1093881;
+  // *** set up all hardware conpoenets on the main board ***
 
-  // *** set up all hardware conpoenets on the main board
   // initialize keyboard - create a keyboard object
 	keybrd = newKeyboard();
   // object that handles CRT Controller 68A45 and video parallel port
 	video = newVideo();
   // this function call sets all ports to 0x00000000
   initialize_z100_ports();
-  // new p8088 processor
-  p8088 = new8088();
-  // load Z100 minitor ROM from bin file
+
+  // load Z100 monitor ROM from bin file
   loadrom("zrom_444_276_1.bin");
-  // temp set ROM romOption
+
+  /* temp set ROM romOption to 0 - make the ROM appear to be repeated throughout
+		memory */
   romOption = 0;
-  // setting killParity to 0 here actually enables the parity checking circuitry
-  // setting this to 1 is saying "yes, kill (disable) the parity checking circuitry"
-  // in the actual hardware, bit 5 of the memory control port would be set to zero
-  // to disable parity ckecking
+
+  /* setting killParity to 0 here actually enables the parity checking circuitry
+ 		setting this to 1 is saying "yes, kill (disable) the parity checking circuitry"
+  	in the actual hardware, bit 5 of the memory control port would be set to zero
+  	to disable parity ckecking */
   killParity = 0;
-  // setting this zeroParity variable to zero forces the zero parity like in the
-  // hardware
+  /* setting this zeroParity variable to zero forces the zero parity like in the
+  	hardware */
   zeroParity = 0;
   // this holds the result of calculating a byte parity
   byteParity = 0;
-  // point the 8085 to the ROM
-  p8085.memory = rom;
+
   // reset 8085
 	reset8085(&p8085);
   printf("8085 reset\n");
-  // point the 8088 to the ROM
-  p8088->memory = rom;
-  // printf("start callback assignments for 8088 processor..\n");
-  assignCallbacks8088(
-    p8088, z100_memory_read_, z100_memory_write_, z100_port_read, z100_port_write
-  );
-  // reset 8088
+
+	// new p8088 processor
+  p8088 = new8088();
+  assignCallbacks8088(p8088, z100_memory_read_, z100_memory_write_,
+		z100_port_read, z100_port_write);
 	reset8088(p8088);
   printf("8088 reset\n");
-  //create two interrupt controller objects "master" and "slave"
-	//need slave to 1. pass the self-test and 2. access JWD1797 floppy controller
+
+  // create two interrupt controller objects "master" and "slave"
+	// need slave to 1. pass the self-test and 2. access JWD1797 floppy controller
 	e8259_master=e8259_new();
 	e8259_slave=e8259_new();
 	e8259_init(e8259_master, "MASTER");
@@ -197,8 +188,7 @@ int z100_main() {
 
   // ==== RUN THE PROCESSORS ====
   printf("Start running processors..\n");
-  //for(int cycle=0; cycle<0x30; cycle++) {
-  // ------------------- run the processor(s) forever ------------------
+  // --- run the processor(s) forever ---
   while(1) {
 
     // if active processor is the 8085
@@ -391,6 +381,8 @@ int z100_main() {
       getchar();
     }
 
+		/* Use this code block to break when the instruction pointer is at a
+		certain value */
 		// if(p8088->IP == 0x3048) {
 		// 	printf("instructions done: %ld\n", instructions_done);
 		// 	printf("Average cycles/instruction: %f\n", (total_cycles/instructions_done));
@@ -401,6 +393,7 @@ int z100_main() {
     //   getchar();
     // }
   }
+
   // return from MAIN
   return 0;
 }
@@ -441,18 +434,23 @@ unsigned int z100_memory_read_(unsigned int addr) {
       (size of ROM) */
       // printf("read actual ROM memory address %X\n", addr % 0x4000);
       return_value = rom[addr&(ROM_SIZE-1)]&0xff;
-      // return_value = rom[addr % 0x4000];
 			break;
 		case 1:
       // the ROM appears at the top of every 64K page of memory
-      // ** NOT IMPLEMENTED **
+			if((addr&0xffff) > 65536-ROM_SIZE)
+				return_value = rom[addr&(ROM_SIZE-1)]&0xff;
+			else if (addr < RAM_SIZE)
+				return_value = ram[addr]&0xff;
+			else if (addr >= 0xc0000 && addr <=0xeffff)
+				return_value = video->vram[addr-0xc0000]&0xff;
+			else
+				return_value = 0xff;
 			break;
 		case 2:
       /* this is the ROM memory configuration that makes the code in ROM appear
       to be at the top of the first megabyte of memory. */
       if(addr < RAM_SIZE)
 				return_value = ram[addr]&0xff;
-      // ** THIS CONDITION IS HARDCODED FOR A 0x4000 byte ROM SIZE **
 			else if (addr >= 0xf8000)
 				return_value = rom[addr&(ROM_SIZE-1)]&0xff;
 			else if (addr >= 0xc0000 && addr <= 0xeffff) {
@@ -466,9 +464,15 @@ unsigned int z100_memory_read_(unsigned int addr) {
 				return_value = 0xff;
 			break;
 		case 3:
-      // ROM is disabled
+      // ROM is disabled - just read from RAM
+			if(addr < RAM_SIZE)
+				return_value = ram[addr]&0xff;
+			else if (addr >= 0xc0000 && addr <= 0xeffff)
+				return_value = video->vram[addr-0xc0000]&0xff;
+			else
+				return_value = 0xff;
 			break;
-	}
+		}
 
   // calculate parity of byte read (return_value) *** SHOULD THIS BE WHEN A BYTE IS WRITTEN?
   byteParity = getParity(return_value);
@@ -941,13 +945,23 @@ void z100_port_write(unsigned int address, unsigned char data) {
       else if (((processor_swap_port_FE >> 7) & 0x01) == 0x00) {
         active_processor = pr8085;
       }
+			// generate interrupt signal (I1 on master 8259A) if bit 1 is set high
+			if(((processor_swap_port_FE >> 1) & 0x01) == 0x01) {
+				e8259_set_irq1(e8259_master, 1);
+			}
+			/* force a swap to the 8088 if bit 0 is high. This option is used when
+			an interrupt is called when the 8085 is active but the interrupt must
+			be handled by the 8088. Otherwise (if bit 0 is low) interrupts are handled
+			by whatever processor is active. */
+			if(((processor_swap_port_FE) & 0x01) == 0x01) {
+				active_processor = pr8088;
+			}
       break;
     // S101 DIP Switch - (Page 2.8 in Z100 technical manual for pin defs)
     // NOTE: since this is a PHYSICAL DIP switch - this case should never be called
     case 0xFF:
       printf("ERROR: CAN NOT WRITE to DIP_switch_s101_FF port at address %X\n",
 				address);
-      // switch_s101_FF = data;
       break;
     // unimplemented port
     default:

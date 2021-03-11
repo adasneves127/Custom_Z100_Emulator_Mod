@@ -27,7 +27,9 @@ void memory_write_8085(P8085* p8085, unsigned int address, unsigned int data)
 {
 	//	printf("memory write: %x = %x\n",address,data);
 	// call mainboard function here...
-	p8085->memory[address]=data;
+	z100_memory_write_(address, data);
+	// p8085->memory[address]=data;
+
 }
 
 unsigned int memory_read_8085(P8085* p8085, unsigned int address)
