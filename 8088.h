@@ -8,7 +8,6 @@ typedef struct
 	unsigned int CS, SS, DS, ES;
 	unsigned int c, p, ac, z, s, t, i, d, o;
 
-
 	int interrupt_deferred, interrupts;
 	int halt;
 	int enable_interrupts;
@@ -22,15 +21,11 @@ typedef struct
 	unsigned int prefetch[PREFETCH_SIZE];
 	int prefetch_counter;
 
-//(unsigned char (*)(void *, long unsigned int))in8, (void (*)(void *, long unsigned int,  unsigned char))out8,
-
-//	unsigned int(*) memory_read(void*,unsigned int address);
 	store_function memory_write_x86;
 	store_function port_write_x86;
 	load_function memory_read_x86;
 	load_function port_read_x86;
-//	unsigned int(*) port_read(void*,unsigned int address);
-//	void* port_write(void*,unsigned int address, unsigned int data);
+
 } P8088;
 
 P8088* new8088();

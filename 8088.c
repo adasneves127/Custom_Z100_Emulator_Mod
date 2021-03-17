@@ -28,7 +28,6 @@ unsigned int seg(P8088* p8088, unsigned int defaultseg);
 P8088* new8088()
 {
 	P8088* cpu = (P8088*)malloc(sizeof(P8088));
-//	reset(cpu);
 	return cpu;
 }
 
@@ -42,7 +41,7 @@ void assignCallbacks8088(P8088* p8088, load_function mem_rd, store_function mem_
 
 void memory_write_x86(P8088* p8088, unsigned int address, unsigned char data)
 {
-	// call mainboard memory write function - make sure modes is properly set
+	// call mainboard memory write function - make sure mode is properly set
 	p8088->memory_write_x86(address,data&0xff);
 	// p8088->memory[address]=data&0xff;
 	// p8088->memory[address]=data;
