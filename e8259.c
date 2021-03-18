@@ -71,7 +71,7 @@ void e8259_init (e8259_t *pic, char* lbl)
 	pic->intr = NULL;
 }
 
-e8259_t *e8259_new (void)
+e8259_t *e8259_new (char* lbl)
 {
 	e8259_t *pic;
 
@@ -81,7 +81,7 @@ e8259_t *e8259_new (void)
 		return (NULL);
 	}
 
-	e8259_init (pic, "______");
+	e8259_init (pic, lbl);
 
 	return (pic);
 }
@@ -141,10 +141,10 @@ void e8259_set_int_fct (e8259_t *pic, void *ext, void *fct)
 static
 void e8259_set_int (e8259_t *pic, unsigned char val)
 {
-	printf("Call e8259_set_int for %s PIC\n", pic->label);
-	printf("pointer to interrupt function: %p\n", pic->intr);
-	printf("incoming val: %X\n", val);
-	printf("pic->intr_val: %X\n\n", pic->intr_val);
+	// printf("Call e8259_set_int for %s PIC\n", pic->label);
+	// printf("pointer to interrupt function: %p\n", pic->intr);
+	// printf("incoming val: %X\n", val);
+	// printf("pic->intr_val: %X\n\n", pic->intr_val);
 
 	// pic->intr_val = 0 and val = 0 - so 0x00 != 0x00 = 0
 	// this will not execute
@@ -152,7 +152,7 @@ void e8259_set_int (e8259_t *pic, unsigned char val)
 		pic->intr_val = val;
 
 		if (pic->intr != NULL) {
-			printf("Call pic->intr %s PIC\n", pic->label);
+			// printf("Call pic->intr %s PIC\n", pic->label);
 			pic->intr (pic->intr_ext, val);
 		}
 	}
@@ -188,7 +188,7 @@ unsigned e8259_get_priority (e8259_t *pic, unsigned char val)
 static
 void e8259_check_int (e8259_t *pic)
 {
-	printf("Call e8259_check_int for %s PIC\n", pic->label);
+	// printf("Call e8259_check_int for %s PIC\n", pic->label);
 	unsigned irr, isr, msk;
 
 	// irr = 0x01 & ~0xFF (0x00) = 0x00
@@ -224,7 +224,7 @@ void e8259_check_int (e8259_t *pic)
  */
 void e8259_set_irq (e8259_t *pic, unsigned irq, unsigned char val)
 {
-	printf("Call e8259_set_irq for %s PIC\n", pic->label);
+	// printf("Call e8259_set_irq for %s PIC\n", pic->label);
 
 	unsigned char msk;
 	// msk will equal -- 0b0000 0001 << (0b0000 0000 & 0b0000 0111)
@@ -256,25 +256,25 @@ void e8259_set_irq (e8259_t *pic, unsigned irq, unsigned char val)
 
 void e8259_set_irq0 (e8259_t *pic, unsigned char val)
 {
-	printf("set %s IRQ0 PIN to %X\n", pic->label, val != 0);
+	// printf("set %s IRQ0 PIN to %X\n", pic->label, val != 0);
 	e8259_set_irq (pic, 0, val != 0);
 }
 
 void e8259_set_irq1 (e8259_t *pic, unsigned char val)
 {
-	printf("set %s IRQ1 PIN to %X\n", pic->label, val != 0);
+	// printf("set %s IRQ1 PIN to %X\n", pic->label, val != 0);
 	e8259_set_irq (pic, 1, val != 0);
 }
 
 void e8259_set_irq2 (e8259_t *pic, unsigned char val)
 {
-	printf("set %s IRQ2 PIN to %X\n", pic->label, val != 0);
+	// printf("set %s IRQ2 PIN to %X\n", pic->label, val != 0);
 	e8259_set_irq (pic, 2, val != 0);
 }
 
 void e8259_set_irq3 (e8259_t *pic, unsigned char val)
 {
-	printf("set %s IRQ3 PIN to %X\n", pic->label, val != 0);
+	// printf("set %s IRQ3 PIN to %X\n", pic->label, val != 0);
 	e8259_set_irq (pic, 3, val != 0);
 }
 
@@ -290,7 +290,7 @@ void e8259_set_irq5 (e8259_t *pic, unsigned char val)
 
 void e8259_set_irq6 (e8259_t *pic, unsigned char val)
 {
-	printf("set %s IRQ6 PIN to %X\n", pic->label, val != 0);
+	// printf("set %s IRQ6 PIN to %X\n", pic->label, val != 0);
 	e8259_set_irq (pic, 6, val != 0);
 }
 
@@ -306,7 +306,7 @@ void e8259_set_irq7 (e8259_t *pic, unsigned char val)
 unsigned char e8259_inta (e8259_t *master_pic, e8259_t *slave_pic)
 {
 
-	printf("Call e8259_inta for %s PIC\n", master_pic->label);
+	// printf("Call e8259_inta for %s PIC\n", master_pic->label);
 
 	unsigned      irrp;
 	unsigned char irrb;
@@ -361,7 +361,7 @@ unsigned char e8259_inta (e8259_t *master_pic, e8259_t *slave_pic)
 	}
 	// otherwise, return the master PIC vector interrupt
 	unsigned char master_int_vector = (master_pic->base + irrp);
-	printf("sent interrupt vector %d into data bus\n", master_int_vector);
+	// printf("sent interrupt vector %d into data bus\n", master_int_vector);
 	return master_int_vector;
 }
 

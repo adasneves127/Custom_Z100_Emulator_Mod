@@ -31,22 +31,74 @@ static gboolean on_keypress(GtkWidget* widget, GdkEventKey* event) {
   // the 'return' char will be used for any incoming keycode that does not
   // correspond to a standard ascii digit or letter - (set the default key code
   // to '\r')
-  char code = '\r';
+  char code = 0x00;
   /* the GdkEventKey* event is a keyboard hardware event that is detected
     from the user machine. What gets used here is the event->keyval instance
     variable of the GdkEventKey object.
     "keyval" is either one of two things - an ascii character or a keycode */
   printf("*key pressed* GdkEventKey Code: %x\n", event->keyval);
-  /* for now, only process letters and digits
-    - if event->keyval is a standard ascii digit or letter (0-Z) */
-  if(event->keyval >= '0' && event->keyval <= 'z') {
-    // change the code used to the corresponding ascii code
-    code = event->keyval;
-    // otherwise, code will be a RETURN (0x0D) code
+
+  // handle BACKSPACE key press
+  if(event->keyval == 0xff08) {
+    code = 0x08;
   }
+  // handle TAB key press
+  else if(event->keyval == 0xff09) {
+    code = 0x09;
+  }
+  // handle RETURN key press
+  else if(event->keyval == 0xff0d) {
+    code = 0x0d;
+  }
+  // handle ESC key press
+  else if(event->keyval == 0xff1b) {
+    code = 0x1b;
+  }
+  // handle DEL key press
+  else if(event->keyval == 0xffff) {
+    code = 0x7f;
+  }
+  // handle ENTER (keypad) key press
+  else if(event->keyval == 0xff8d) {
+    code = (char)0x8d;
+  }
+  // F0 - F12 keys NOT implemented
+  // handle UP key press
+  else if(event->keyval == 0xff52) {
+    code = 0xa5;
+  }
+  // handle DOWN key press
+  else if(event->keyval == 0xff54) {
+    code = 0xa6;
+  }
+  // handle RIGHT key press
+  else if(event->keyval == 0xff53) {
+    code = 0xa7;
+  }
+  // handle LEFT key press
+  else if(event->keyval == 0xff51) {
+    code = 0xa8;
+  }
+  // handle HOME (numLock off-keypad 7 (Home)) key press
+  else if(event->keyval == 0xff95) {
+    code = 0xa9;
+  }
+  // handle BREAK key press
+  else if(event->keyval == 0xff13) {
+    code = 0xaa;
+  }
+  // handle keypad '-' '.' key press
+  else if(event->keyval == 0xffad || event->keyval == 0xffae ||
+    (event->keyval >= 0xffb0 && event->keyval <= 0xffb9)) {
+    code = event->keyval & 0xFF;
+  }
+  // handle all other keys where event->keyval = z-100 keycodes
+  else if(event->keyval >= 0x20 && event->keyval <= 0x7E) {
+    code = event->keyval;
+  }
+
   // call function keyaction in keyboard.c, which loads the keyboard buffer
   // with the pressed key code
-  // ** NOTE: event->keyval MAY NOT MATCH THE Z-100 KEY CODES - FIX THIS!! **
   keyaction(keybrd, code);
 }
 

@@ -117,7 +117,7 @@ void e8259_init (e8259_t *pic, char* lbl);
  * @short  Create and initialize a PIC 8259 structure
  * @return A PIC 8259 structure or NULL on error
  *****************************************************************************/
-e8259_t *e8259_new (void);
+e8259_t *e8259_new (char* lbl);
 
 /*!***************************************************************************
  * @short Free the resources used by a PIC 8259 structure

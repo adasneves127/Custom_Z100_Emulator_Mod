@@ -1,6 +1,6 @@
 typedef struct
 {
-	unsigned int fifo[17];
+	unsigned char fifo[17];
 	unsigned int dataReg;
 	int fifoHead;
 	int fifoTail;
@@ -30,6 +30,6 @@ void beep();
 
 
 //from UI
-void keyaction(keyboard* k,int code);
+void keyaction(keyboard* k,char code);
 void keydown(char* name);
 void keyup(char* name);

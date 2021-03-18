@@ -77,7 +77,7 @@ unsigned int keyboardDataRead(keyboard* k)
 	return rval;
 }
 
-void keyaction(keyboard* k, int code)
+void keyaction(keyboard* k, char code)
 {
 	printf("Incoming code from GdkEventKey to kb device buffer: %x\n", code);
 	k->fifo[k->fifoTail]=code;

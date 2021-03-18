@@ -87,6 +87,8 @@ void renderScreen(Video* v, unsigned int* pixels) {
 		height of 25 characters, this equates to 225 scan lines. However, with the
 		extra 7 lines per row of characters, there are actually a total of 400 scan
 		lines of addresses (225 + (25 * 7)) */
+	printf("%d\n", v->addressLatch);
+
 	for(int actual_scan_line = 0; actual_scan_line < 225 + (25*7); actual_scan_line++) {
 
 		// each character has a height of 9 scan lines
@@ -123,13 +125,22 @@ void renderScreen(Video* v, unsigned int* pixels) {
 					/* flash enabled mode turns all pixel colors on and ignores the
 					contents of VRAM */
 					if(v->flashenabled) { blue=0xff; red=0xff; green=0xff;}
-					// based on each pixel being a 0 or 1 (or 0xff in the case of flashenabled),
-					// set each color to an 8-bit value (either 0x00 or 0xff)
+					/* based on each pixel being a 0 or 1 (or 0xff in the case of flashenabled),
+					 	set each color to an 8-bit value (either 0x00 or 0xff) */
 					blue = blue==0? 0:0xff;
 					red = red==0? 0:0xff;
 					green = green==0? 0:0xff;
 					// construct 24-bit color from 8-bit colors
-					int twentyFourBitColor = (red<<16)|(green<<8)|blue;
+					int twentyFourBitColor = (red<<16)|(green<<8)|(blue);
+					// DEBUG
+					// if(twentyFourBitColor > 0) {
+					// 	// printf("%ld\n", sizeof(twentyFourBitColor));
+					// 	printf("%X\n", red);
+					// 	printf("%X\n", green);
+					// 	printf("%X\n", blue);
+					// 	printf("%06x\n", twentyFourBitColor);
+					// }
+
 					/* -- [charXpos * 8] advances the pixel index to the start of the next
 						set of character bits for this scan line
 						-- [7 - bit] fills in the bit data backwards - for example, for the

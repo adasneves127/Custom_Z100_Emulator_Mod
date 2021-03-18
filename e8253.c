@@ -204,7 +204,7 @@ void cnt_set_out (e8253_counter_t *cnt, unsigned char val)
 		cnt->out_val = val;
 
 		if (cnt->out != NULL) {
-printf("TIMER INTERRUPT CALL %x\n",val);
+			// printf("TIMER INTERRUPT CALL %x\n",val);
 			cnt->out (cnt->out_ext, val);
 		}
 	}

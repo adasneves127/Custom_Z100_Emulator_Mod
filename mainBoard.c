@@ -139,10 +139,10 @@ int z100_main() {
 
   // create two interrupt controller objects "master" and "slave"
 	// need slave to 1. pass the self-test and 2. access JWD1797 floppy controller
-	e8259_master=e8259_new();
-	e8259_slave=e8259_new();
-	e8259_init(e8259_master, "MASTER");
-	e8259_init(e8259_slave, "SLAVE_");
+	e8259_master=e8259_new("MASTER");
+	e8259_slave=e8259_new("SLAVE_");
+	// e8259_init(e8259_master, "MASTER");
+	// e8259_init(e8259_slave, "SLAVE_");
 	e8259_reset(e8259_master);
 	e8259_reset(e8259_slave);
   /* setup master int controller to cause 8088 interrupt on trap pin (connect interrupt
@@ -276,7 +276,7 @@ int z100_main() {
     /* THIS IS THE LESS BETTER WAY TO TIME THE INTERRUPTS */
     // simulate VSYNC interrupt on I6 (keyboard video display and light pen int)
     if(instructions_done%10000 == 10000-2) {
-			printf("%s\n", "*** KEYINT or DSPYINT/VSYNC interrupt occurred - I6 from Master PIC ***");
+			// printf("%s\n", "*** KEYINT or DSPYINT/VSYNC interrupt occurred - I6 from Master PIC ***");
       // set the irq6 pin on the master 8259 int controller to high
       e8259_set_irq6(e8259_master, 1);
     }
@@ -523,28 +523,28 @@ unsigned int z100_port_read(unsigned int address) {
   switch(address) {
     // Z-217 Secondary Winchester Drive Controller Status Port (0xAA)
     case 0xAA:
-      printf("reading from Z-217 Secondary Winchester Drive Controller Status Port %X [NO HARDWARE IMPLEMENTATION]\n", address);
+      // printf("reading from Z-217 Secondary Winchester Drive Controller Status Port %X [NO HARDWARE IMPLEMENTATION]\n", address);
       /* this returned status value is hardcoded to indicate the absence of the
       Winchester Drive Controller S-100 card */
       return_value = 0xfe;
       break;
     // Z-217 Secondary Winchester Drive Controller Command Port (0xAB)
     case 0xAB:
-      printf("reading from Z-217 Secondary Winchester Drive Controller Command Port %X [NO HARDWARE IMPLEMENTATION]\n", address);
+      // printf("reading from Z-217 Secondary Winchester Drive Controller Command Port %X [NO HARDWARE IMPLEMENTATION]\n", address);
       /* this returned command value is hardcoded to indicate the absence of the
       Winchester Drive controller */
       return_value = 0x0;
       break;
     // Z-217 Primary Winchester Drive Controller Status Port (0xAE)
     case 0xAE:
-      printf("reading from Z-217 Primary Winchester Drive Controller Status Port %X [NO HARDWARE IMPLEMENTATION]\n", address);
+      // printf("reading from Z-217 Primary Winchester Drive Controller Status Port %X [NO HARDWARE IMPLEMENTATION]\n", address);
       /* this returned status value is hardcoded to indicate the absence of the
       Winchester Drive Controller S-100 card */
       return_value = 0xfe;
       break;
     // Z-217 Primary Winchester Drive Controller Command Port (0xAF)
     case 0xAF:
-      printf("reading from Z-217 Primary Winchester Drive Controller Command Port %X [NO HARDWARE IMPLEMENTATION]\n", address);
+      // printf("reading from Z-217 Primary Winchester Drive Controller Command Port %X [NO HARDWARE IMPLEMENTATION]\n", address);
       /* this returned command value is hardcoded to indicate the absence of the
       Winchester Drive controller */
       return_value = 0x0;
@@ -552,167 +552,167 @@ unsigned int z100_port_read(unsigned int address) {
     /* FD179X-02 Floppy Disk Formatter/Controller (0xB0-0xB5) */
     case 0xB0:
       // Z-207 Primary Floppy Drive Controller Status Port
-      printf("reading from Z-207 Primary Floppy Drive Controller Status Port %X\n",
-        address);
+      // printf("reading from Z-207 Primary Floppy Drive Controller Status Port %X\n",
+      //  address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB1:
       // Z-207 Primary Floppy Drive Controller Track Port
-      printf("reading from Z-207 Primary Floppy Drive Controller Track Port %X\n",
-        address);
+      // printf("reading from Z-207 Primary Floppy Drive Controller Track Port %X\n",
+      //  address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB2:
       // Z-207 Primary Floppy Drive Controller Sector Port
-      printf("reading from Z-207 Primary Floppy Drive Controller Sector Port %X\n",
-        address);
+      // printf("reading from Z-207 Primary Floppy Drive Controller Sector Port %X\n",
+      //   address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB3:
       // Z-207 Primary Floppy Drive Controller Data Port
-      printf("reading from Z-207 Primary Floppy Drive Controller Data Port %X\n",
-        address);
+      // printf("reading from Z-207 Primary Floppy Drive Controller Data Port %X\n",
+      //   address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB4:
       // Z-207 Primary Floppy Drive Controller CNTRL Control Port
-      printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
-        address);
+      // printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
+      //   address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB5:
       // Z-207 Primary Floppy Drive Controller CNTRL Status Port
-      printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
-        address);
+      // printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
+      //   address);
       return_value = readJWD1797(jwd1797, address);
       break;
     // Video Commands - 68A21 parallel port
     case 0xD8:
-      printf("reading from Video Command - 68A21 parallel port %X\n", address);
+      // printf("reading from Video Command - 68A21 parallel port %X\n", address);
       return_value = readVideo(video, address)&0xff;
       break;
     // Video Command Control - 68A21 parallel port
     case 0xD9:
-      printf("reading from Video Command Control - 68A21 parallel port %X\n", address);
+      // printf("reading from Video Command Control - 68A21 parallel port %X\n", address);
       return_value = readVideo(video, address)&0xff;
       break;
     // Video RAM Mapping Module Data - 68A21 parallel port
     case 0xDA:
-      printf("reading from Video RAM Mapping Module Data - 68A21 parallel port %X\n",
-        address);
+      // printf("reading from Video RAM Mapping Module Data - 68A21 parallel port %X\n",
+      //   address);
       return_value = readVideo(video, address)&0xff;
       break;
     // Video RAM Mapping Module Control - 68A21 parallel port
     case 0xDB:
-      printf("reading from Video RAM Mapping Module Control - 68A21 parallel port %X\n",
-        address);
+      // printf("reading from Video RAM Mapping Module Control - 68A21 parallel port %X\n",
+      //   address);
       return_value = readVideo(video, address)&0xff;
       break;
     // CRT Controller 68A45 Register Select port 0xDC
     case 0xDC:
-      printf("reading from 68A45 CRT Controller Register Select port %X\n", address);
+      // printf("reading from 68A45 CRT Controller Register Select port %X\n", address);
       return_value = readVideo(video, address)&0xff;
       break;
     // CRT Controller 68A45 Register Value port 0xDD
     case 0xDD:
-      printf("reading from 68A45 CRT Controller Register Value port %X\n", address);
+      // printf("reading from 68A45 CRT Controller Register Value port %X\n", address);
       return_value = readVideo(video, address)&0xff;
       break;
     // parallel port (68A21 - Peripheral Interface Adapter (PIA))
     // ports 0xE0-0xE3 ***WHY SHOULD ALL THE 68A21 PORT READS RETURN 0x40??**
     case 0xE0:
       // general data port
-      printf("reading from 68A21 general data port %X [0x40 hardcoded return]\n",
-        address);
+      // printf("reading from 68A21 general data port %X [0x40 hardcoded return]\n",
+      //  address);
       // hardcoded return value
       return_value = 0x40;
       break;
     case 0xE1:
       // general control port
-      printf("reading from 68A21 general control port %X [0x40 hardcoded return]\n",
-        address);
+      // printf("reading from 68A21 general control port %X [0x40 hardcoded return]\n",
+      //  address);
       // hardcoded return value
       return_value = 0x40;
       break;
     case 0xE2:
       // printer data port
-      printf("reading from 68A21 printer data port %X [0x40 hardcoded return]\n",
-        address);
+      // printf("reading from 68A21 printer data port %X [0x40 hardcoded return]\n",
+      //   address);
       // hardcoded return value
       return_value = 0x40;
       break;
     case 0xE3:
       // printer control port
-      printf("reading from 68A21 printer control port %X [0x40 hardcoded return]\n",
-        address);
+      // printf("reading from 68A21 printer control port %X [0x40 hardcoded return]\n",
+      //   address);
       // hardcoded return value
       return_value = 0x40;
       break;
     case 0xE4:
       // 8253 timer counter 0
-      printf("reading from 8253 timer counter 0 port %X\n", address);
+      // printf("reading from 8253 timer counter 0 port %X\n", address);
       return_value = e8253_get_uint8(e8253, address&3)&0xff;
       break;
     case 0xE5:
       // 8253 timer counter 1
-      printf("reading from 8253 timer counter 1 port %X\n", address);
+      // printf("reading from 8253 timer counter 1 port %X\n", address);
       return_value = e8253_get_uint8(e8253, address&3)&0xff;
       break;
     case 0xE6:
       // 8253 timer counter 2
-      printf("reading from 8253 timer counter 2 port %X\n", address);
+      // printf("reading from 8253 timer counter 2 port %X\n", address);
       return_value = e8253_get_uint8(e8253, address&3)&0xff;
       break;
     case 0xE7:
       // 8253 timer control port
-      printf("reading from 8253 control port %X\n", address);
+      // printf("reading from 8253 control port %X\n", address);
       return_value = e8253_get_uint8(e8253, address&3)&0xff;
       break;
     // read IRR register of 8259 slave interrupt controller (PIC)
     case 0xF0:
 		case 0xF1:
-      printf("reading slave interrupt controller port %X\n", address);
+      // printf("reading slave interrupt controller port %X\n", address);
 			return_value = e8259_get_uint8(e8259_slave, address&1)&0xff;
       break;
     // read IRR register of 8259 master interrupt controller (PIC)
     case 0xF2:
 		case 0xF3:
-      printf("reading master interrupt controller port %X\n", address);
+      // printf("reading master interrupt controller port %X\n", address);
 			return_value = e8259_get_uint8(e8259_master, address&1)&0xff;
       break;
     // keyboard data
     case 0xF4:
-      printf("reading keyboard data port %X\n", address);
+      // printf("reading keyboard data port %X\n", address);
       return_value = keyboardDataRead(keybrd);
       break;
     // keyboard status
     case 0xF5:
-      printf("reading keyboard status port %X\n", address);
+      // printf("reading keyboard status port %X\n", address);
       return_value = keyboardStatusRead(keybrd);
       break;
     // IO_DIAG port F6
     case 0xF6:
-      printf("reading from IO_DIAG port %X\n", address);
+      // printf("reading from IO_DIAG port %X\n", address);
       return_value = io_diag_port_F6;
       break;
     case 0xFB:
       // 8253 timer status port
-      printf("reading from 8253 status port %X\n", address);
+      // printf("reading from 8253 status port %X\n", address);
       return_value = e8253_get_status(e8253)&0xff;
       break;
     case 0xFC:
       // memory control latch port FC;
-      printf("reading from memory control latch port %X\n", address);
+      // printf("reading from memory control latch port %X\n", address);
       return_value = memory_control_latch_FC;
       break;
 		case 0xFE:
       // processor swap port FE;
-      printf("reading from processor swap port %X\n", address);
+      // printf("reading from processor swap port %X\n", address);
       return_value = processor_swap_port_FE;
       break;
     // S101 DIP Switch - (Page 2.8 in Z100 technical manual for pin defs)
     case 0xFF:
-      printf("reading from DIP_switch_s101_FF port %X\n", address);
+      // printf("reading from DIP_switch_s101_FF port %X\n", address);
       return_value = switch_s101_FF;
       break;
     default:
@@ -721,7 +721,7 @@ unsigned int z100_port_read(unsigned int address) {
       break;
   }
   // printInt(return_value);
-  printf("value read: %X\n", return_value);
+  // printf("value read: %X\n", return_value);
   return return_value;
 }
 
@@ -731,151 +731,151 @@ void z100_port_write(unsigned int address, unsigned char data) {
   switch(address) {
     // Z-217 Secondary Winchester Drive Controller Status Port (0xAA)
     case 0xAA:
-      printf("writing %X to Z-217 Secondary Winchester Drive Controller Status Port %X [NO HARDWARE IMPLEMENTATION]\n",
-        data, address);
+      // printf("writing %X to Z-217 Secondary Winchester Drive Controller Status Port %X [NO HARDWARE IMPLEMENTATION]\n",
+      //   data, address);
       /* NO Winchester Drive Controller S-100 card present */
       break;
     // Z-217 Secondary Winchester Drive Controller Command Port (0xAB)
     case 0xAB:
-      printf("writing %X to Z-217 Secondary Winchester Drive Controller Command Port %X [NO HARDWARE IMPLEMENTATION]\n",
-        data, address);
+      // printf("writing %X to Z-217 Secondary Winchester Drive Controller Command Port %X [NO HARDWARE IMPLEMENTATION]\n",
+      //   data, address);
       /* NO Winchester Drive Controller S-100 card present */
       break;
     // Z-217 Primary Winchester Drive Controller Status Port (0xAE)
     case 0xAE:
-      printf("writing %X to Z-217 Primary Winchester Drive Controller Status Port %X [NO HARDWARE IMPLEMENTATION]\n",
-        data, address);
+      // printf("writing %X to Z-217 Primary Winchester Drive Controller Status Port %X [NO HARDWARE IMPLEMENTATION]\n",
+      //   data, address);
       /* NO Winchester Drive Controller S-100 card present */
       break;
     // Z-217 Primary Winchester Drive Controller Command Port (0xAF)
     case 0xAF:
-      printf("writing %X to Z-217 Primary Winchester Drive Controller Command Port %X [NO HARDWARE IMPLEMENTATION]\n",
-        data, address);
+      // printf("writing %X to Z-217 Primary Winchester Drive Controller Command Port %X [NO HARDWARE IMPLEMENTATION]\n",
+      //   data, address);
       /* NO Winchester Drive Controller S-100 card present */
       break;
     /* FD179X-02 Floppy Disk Formatter/Controller (0xB0-0xB5) */
     case 0xB0:
       // Z-207 Primary Floppy Drive Controller Command Port
-      printf("writing %X to Z-207 Primary Floppy Drive Controller Command Port %X\n",
-        data, address);
+      // printf("writing %X to Z-207 Primary Floppy Drive Controller Command Port %X\n",
+      //   data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB1:
       // Z-207 Primary Floppy Drive Controller Track Port
-      printf("writing %X to Z-207 Primary Floppy Drive Controller Track Port %X\n",
-        data, address);
+      // printf("writing %X to Z-207 Primary Floppy Drive Controller Track Port %X\n",
+      //   data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB2:
       // Z-207 Primary Floppy Drive Controller Sector Port
-      printf("writing %X to Z-207 Primary Floppy Drive Controller Sector Port %X\n",
-        data, address);
+      // printf("writing %X to Z-207 Primary Floppy Drive Controller Sector Port %X\n",
+      //   data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB3:
       // Z-207 Primary Floppy Drive Controller Data Port
-      printf("writing %X to Z-207 Primary Floppy Drive Controller Data Port %X\n",
-        data, address);
+      // printf("writing %X to Z-207 Primary Floppy Drive Controller Data Port %X\n",
+      //   data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB4:
       // Z-207 Primary Floppy Drive Controller CNTRL Control Port
-      printf("writing %X to Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
-        data, address);
+      // printf("writing %X to Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
+      //   data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB5:
       // Z-207 Primary Floppy Drive Controller CNTRL Status Port
-      printf("writing %X to Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
-        data, address);
+      // printf("writing %X to Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
+      //   data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     // Video Commands - 68A21 parallel port
     case 0xD8:
-      printf("writing %X to Video Command - 68A21 parallel port %X\n",
-      data, address);
+      // printf("writing %X to Video Command - 68A21 parallel port %X\n",
+      // 	data, address);
       writeVideo(video, address, data&0xff);
       break;
     // Video Command Control - 68A21 parallel port
     case 0xD9:
-      printf("writing %X to Video Command Control - 68A21 parallel port %X\n",
-      data, address);
+      // printf("writing %X to Video Command Control - 68A21 parallel port %X\n",
+      // 	data, address);
       writeVideo(video, address, data&0xff);
       break;
     // Video RAM Mapping Module Data - 68A21 parallel port
     case 0xDA:
-      printf("writing %X to Video RAM Mapping Module Data - 68A21 parallel port %X\n",
-      data, address);
+      // printf("writing %X to Video RAM Mapping Module Data - 68A21 parallel port %X\n",
+      // 	data, address);
       writeVideo(video, address, data&0xff);
       break;
     // Video RAM Mapping Module Control - 68A21 parallel port
     case 0xDB:
-      printf("writing %X to Video RAM Mapping Module Control - 68A21 parallel port %X\n",
-      data, address);
+      // printf("writing %X to Video RAM Mapping Module Control - 68A21 parallel port %X\n",
+      // 	data, address);
       writeVideo(video, address, data&0xff);
       break;
     // CRT Controller 68A45 Register Select port 0xDC
     case 0xDC:
-      printf("writing %X to 68A45 CRT Controller Register Select port %X\n",
-      data, address);
+      // printf("writing %X to 68A45 CRT Controller Register Select port %X\n",
+      // 	data, address);
       writeVideo(video, address, data&0xff);
       break;
     // CRT Controller 68A45 Register Value port 0xDD
     case 0xDD:
-      printf("writing %X to 68A45 CRT Controller Register Value port %X\n",
-      data, address);
+      // printf("writing %X to 68A45 CRT Controller Register Value port %X\n",
+      // 	data, address);
       writeVideo(video, address, data&0xff);
       break;
     // parallel port (68A21 - Peripheral Interface Adapter (PIA))
     // ports 0xE0-0xE3
     case 0xE0:
       // general data port
-      printf("writing %X to 68A21 general data port %X [NO HARDWARE IMPLEMENTATION]\n",
-        data, address);
+      // printf("writing %X to 68A21 general data port %X [NO HARDWARE IMPLEMENTATION]\n",
+      //  data, address);
       break;
     case 0xE1:
       // general control port
-      printf("writing %X to 68A21 general control port %X [NO HARDWARE IMPLEMENTATION]\n",
-        data, address);
+      // printf("writing %X to 68A21 general control port %X [NO HARDWARE IMPLEMENTATION]\n",
+      //   data, address);
       break;
     case 0xE2:
       // printer data port
-      printf("writing %X to 68A21 printer data port %X [NO HARDWARE IMPLEMENTATION]\n",
-        data, address);
+      // printf("writing %X to 68A21 printer data port %X [NO HARDWARE IMPLEMENTATION]\n",
+      //   data, address);
       break;
     case 0xE3:
       // printer control port
-      printf("writing %X to 68A21 printer control port %X [NO HARDWARE IMPLEMENTATION]\n",
-        data, address);
+      // printf("writing %X to 68A21 printer control port %X [NO HARDWARE IMPLEMENTATION]\n",
+      //   data, address);
       break;
     case 0xE4:
       // 8253 timer counter 0
-      printf("writing %X to 8253 timer counter 0 port %X\n", data, address);
+      // printf("writing %X to 8253 timer counter 0 port %X\n", data, address);
       e8253_set_uint8(e8253, address&3, data&0xff);
       break;
     case 0xE5:
       // 8253 timer counter 1
-      printf("writing %X to 8253 timer counter 1 port %X\n", data, address);
+      // printf("writing %X to 8253 timer counter 1 port %X\n", data, address);
       e8253_set_uint8(e8253, address&3, data&0xff);
       break;
     case 0xE6:
       // 8253 timer counter 2
-      printf("writing %X to 8253 timer counter 2 port %X\n", data, address);
+      // printf("writing %X to 8253 timer counter 2 port %X\n", data, address);
       e8253_set_uint8(e8253, address&3, data&0xff);
       break;
     case 0xE7:
       // 8253 timer control port
-      printf("writing %X to 8253 timer control port %X\n", data, address);
+      // printf("writing %X to 8253 timer control port %X\n", data, address);
       e8253_set_uint8(e8253, address&3, data&0xff);
       break;
     case 0xFB:
       // 8253 timer status port
-      printf("writing %X to 8253 timer status port %X\n", data, address);
+      // printf("writing %X to 8253 timer status port %X\n", data, address);
       e8253_set_status(e8253, data&0xff);
       break;
     // memory control latch port FC;
     case 0xFC:
-      printf("writing %X to memory control latch port %X\n", data, address);
+      // printf("writing %X to memory control latch port %X\n", data, address);
 			memory_control_latch_FC = data;
       /* extract bits 3 and 2 to determine which ROM memory configuration
        will be set */
@@ -912,30 +912,30 @@ void z100_port_write(unsigned int address, unsigned char data) {
     // slave interrupt controler (8259) ports F0 and F1
     case 0xF0:
     case 0xF1:
-      printf("writing %X to slave interrupt controller port %X\n", data, address);
+      // printf("writing %X to slave interrupt controller port %X\n", data, address);
       e8259_set_uint8(e8259_slave, address&1, data);
       break;
     // master interrupt controler (8259) ports F2 and F3
     case 0xF2:
     case 0xF3:
-      printf("writing %X to master interrupt controller port %X\n", data, address);
+      // printf("writing %X to master interrupt controller port %X\n", data, address);
       e8259_set_uint8(e8259_master, address&1, data);
       break;
     // keyboard command port F5
     case 0xF5:
-      printf("writing %X to keyboard command port %X\n", data, address);
+      // printf("writing %X to keyboard command port %X\n", data, address);
       keyboardCommandWrite(keybrd, data);
       break;
     // IO_DIAG port F6
     case 0xF6:
-      printf("writing %X to IO_DIAG port %X\n", data, address);
+      // printf("writing %X to IO_DIAG port %X\n", data, address);
       io_diag_port_F6 = data;
       break;
     // processor switch port FE
     case 0xFE:
       processor_swap_port_FE = data;
-      printf("Value %X written to processor_swap_port_FE port at address %X\n",
-        data, address);
+      // printf("Value %X written to processor_swap_port_FE port at address %X\n",
+      //  data, address);
       // select proper processor based on 7th bit in port data
       // if the 7th bit is 1, select 8088 processor
       if(((processor_swap_port_FE >> 7) & 0x01) == 0x01) {
@@ -960,8 +960,8 @@ void z100_port_write(unsigned int address, unsigned char data) {
     // S101 DIP Switch - (Page 2.8 in Z100 technical manual for pin defs)
     // NOTE: since this is a PHYSICAL DIP switch - this case should never be called
     case 0xFF:
-      printf("ERROR: CAN NOT WRITE to DIP_switch_s101_FF port at address %X\n",
-				address);
+      // printf("ERROR: CAN NOT WRITE to DIP_switch_s101_FF port at address %X\n",
+			// 	address);
       break;
     // unimplemented port
     default:
