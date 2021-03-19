@@ -141,8 +141,6 @@ int z100_main() {
 	// need slave to 1. pass the self-test and 2. access JWD1797 floppy controller
 	e8259_master=e8259_new("MASTER");
 	e8259_slave=e8259_new("SLAVE_");
-	// e8259_init(e8259_master, "MASTER");
-	// e8259_init(e8259_slave, "SLAVE_");
 	e8259_reset(e8259_master);
 	e8259_reset(e8259_slave);
   /* setup master int controller to cause 8088 interrupt on trap pin (connect interrupt
@@ -196,21 +194,25 @@ int z100_main() {
       doInstruction8085(&p8085);
 			last_instruction_cycles = p8085.cycles;
       instructions_done++;
-      printf("instructions done: %ld\n", instructions_done);
-      printf("PC = %X, opcode = %X, inst = %s\n",p8085.PC,p8085.opcode,p8085.name);
-      // int A, B, C, D, E, H, L, SP, PC;
-      printf("A = %X, B = %X, C = %X, D = %X, E = %X, H = %X, L = %X, SP = %X\n",
-        p8085.A, p8085.B, p8085.C, p8085.D, p8085.E, p8085.H, p8085.L, p8085.SP);
-      // int c, p, ac, z, s, i, m75, m65, m55;
-      printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
-        p8085.c, p8085.p, p8085.ac, p8085.z, p8085.s);
-      printf("i = %X, m75 = %X, m65 = %X, m55 = %X\n",
-        p8085.i, p8085.m75, p8085.m65, p8085.m55);
+			if(debug_mode && instructions_done >= breakAtInstruction) {
+				printf("instructions done: %ld\n", instructions_done);
+	      printf("PC = %X, opcode = %X, inst = %s\n",p8085.PC,p8085.opcode,p8085.name);
+	      // int A, B, C, D, E, H, L, SP, PC;
+	      printf("A = %X, B = %X, C = %X, D = %X, E = %X, H = %X, L = %X, SP = %X\n",
+	        p8085.A, p8085.B, p8085.C, p8085.D, p8085.E, p8085.H, p8085.L, p8085.SP);
+	      // int c, p, ac, z, s, i, m75, m65, m55;
+	      printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
+	        p8085.c, p8085.p, p8085.ac, p8085.z, p8085.s);
+	      printf("i = %X, m75 = %X, m65 = %X, m55 = %X\n",
+	        p8085.i, p8085.m75, p8085.m65, p8085.m55);
+			}
     }
     // if the active processor is the 8088
     else if(active_processor == pr8088) {
       doInstruction8088(p8088);
 			last_instruction_cycles = p8088->cycles;
+			// add the number of cycles the last instruction took to the total cycles
+			total_cycles += p8088->cycles;
       instructions_done++;
       /* increment cycles_done to add the number of cycles the current
       instruction took */
@@ -235,10 +237,7 @@ int z100_main() {
           p8088->c,p8088->p,p8088->ac,p8088->z,p8088->s);
         printf("trap = %X, int = %X, dir = %X, overflow = %X\n",
           p8088->t,p8088->i,p8088->d,p8088->o);
-        }
-
-				// add the number of cycles the last instruction took to the total cycles
-				total_cycles += p8088->cycles;
+      }
 		}
     // printf("\n");
 
@@ -413,7 +412,7 @@ void cascadeInterruptFunctionCall(void* v, int number) {
   if(number == 0) {
     return;
   }
-	printf("SLAVE 8259 PIC INT SIGNAL to MASTER 8259 PIC IRQ3\n");
+	// printf("SLAVE 8259 PIC INT SIGNAL to MASTER 8259 PIC IRQ3\n");
   e8259_set_irq3(e8259_master, 1);
 }
 
