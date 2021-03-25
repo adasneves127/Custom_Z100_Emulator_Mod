@@ -146,8 +146,7 @@ void e8259_set_int (e8259_t *pic, unsigned char val)
 	// printf("incoming val: %X\n", val);
 	// printf("pic->intr_val: %X\n\n", pic->intr_val);
 
-	// pic->intr_val = 0 and val = 0 - so 0x00 != 0x00 = 0
-	// this will not execute
+	// pic->intr_val = 0 and val = 1 - so 0x00 != 0x01 = 1 (TRUE)
 	if (pic->intr_val != val) {
 		pic->intr_val = val;
 
@@ -205,11 +204,12 @@ void e8259_check_int (e8259_t *pic)
 	msk = 1 << pic->priority;
 
 	while (1) {
+		// ex: 0x00 & 0x01 = 0x00
 		if (isr & msk) {
 			e8259_set_int (pic, 0);
 			return;
 		}
-
+		// ex: 0x01 & 0x01 = 0x01
 		if (irr & msk) {
 			e8259_set_int (pic, 1);
 			return;
@@ -227,7 +227,7 @@ void e8259_set_irq (e8259_t *pic, unsigned irq, unsigned char val)
 	// printf("Call e8259_set_irq for %s PIC\n", pic->label);
 
 	unsigned char msk;
-	// msk will equal -- 0b0000 0001 << (0b0000 0000 & 0b0000 0111)
+	// msk will equal -- 0b0000 0000 << (0b0000 0000 & 0b0000 0111)
 	// = 0b0000 0001
 	msk = 0x01 << (irq & 0x07);
 
@@ -319,7 +319,7 @@ unsigned char e8259_inta (e8259_t *master_pic, e8259_t *slave_pic)
 	/* highest priority interrupt */
 	irrp = e8259_get_priority (master_pic, master_pic->irr & ~master_pic->imr);
 
-	// the highest interrupt should not be 16 or over (IRR >= 0b1111 1111)
+	// the highest interrupt should not be 16 or over
 	if (irrp >= 16) {
 		/* should not happen */
 		fprintf (stderr, "e8259: INTA without IRQ\n");
@@ -350,8 +350,8 @@ unsigned char e8259_inta (e8259_t *master_pic, e8259_t *slave_pic)
 
 	e8259_check_int (master_pic);
 
-	// check if irrb == 3, the slave has caused the interrupt in master IR3.
-	if (irrb == 3 && (master_pic->label == "MASTER")) {
+	// check if irrp == 3, the slave has caused the interrupt in master IR3.
+	if (irrp == 3 && (master_pic->label == "MASTER")) {
 		// recursive call and return the interrupt vector from the slave PIC
 		// pass the slave PIC as the master and return its vector
 		printf("Interrupt signal from SLAVE 8259 PIC on MASTER IRQ3\n");
