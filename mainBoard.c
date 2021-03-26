@@ -57,7 +57,7 @@ int romOption;  // temp holder of bits 3 and 2 of memeory control latch port FC
 int killParity;
 int zeroParity;
 int byteParity;
-bool debug_mode;
+char debug_mode;
 bool reset_irq6;
 unsigned char user_debug_mode_choice;
 unsigned char switch_s101_FF;
@@ -194,7 +194,8 @@ int z100_main() {
       doInstruction8085(&p8085);
 			last_instruction_cycles = p8085.cycles;
       instructions_done++;
-			if(debug_mode && instructions_done >= breakAtInstruction) {
+			if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+				(debug_mode == '2' && (p8085.PC >= breakAtInstruction))) {
 				printf("instructions done: %ld\n", instructions_done);
 	      printf("PC = %X, opcode = %X, inst = %s\n",p8085.PC,p8085.opcode,p8085.name);
 	      // int A, B, C, D, E, H, L, SP, PC;
@@ -209,6 +210,9 @@ int z100_main() {
     }
     // if the active processor is the 8088
     else if(active_processor == pr8088) {
+			if(jwd1797->wait_enabled) {
+				printf("%s\n", "WD1797 wait enabled option is active..");
+			}
       doInstruction8088(p8088);
 			last_instruction_cycles = p8088->cycles;
 			// add the number of cycles the last instruction took to the total cycles
@@ -218,7 +222,8 @@ int z100_main() {
       instruction took */
       // cycles_done = cycles_done + p8088->cycles;
       // only print processor status if debug conditions are met
-      if(debug_mode && instructions_done >= breakAtInstruction) {
+      if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+				(debug_mode == '2' && (p8088->IP >= breakAtInstruction))) {
         printf("instructions done: %ld\n", instructions_done);
         printf("IP = %X, opcode = %X, inst = %s\n",
           p8088->IP,p8088->opcode,p8088->name_opcode);
@@ -345,7 +350,7 @@ int z100_main() {
     prompt is waiting for a command entry from the user.
     ** 1093881 is the number of instructions is takes to reach the hand prompt
     and check the keyboard status one time */
-    if(debug_mode && instructions_done == (1093881 + 5)) {
+    if(debug_mode == '1' && (instructions_done == (1093881 + 5))) {
       keyaction(keybrd, 'b');
       // keyaction(keybrd, '\n');
     }
@@ -358,7 +363,7 @@ int z100_main() {
 		** Instruction 1098855 is a point at which the keyboard status loop has
 		been reached and has been running for a significant amount of
 		iterations */
-		if(debug_mode && instructions_done == (1098855)) {
+		if(debug_mode == '1' && (instructions_done == (1098855))) {
       keyaction(keybrd, 0x0D);
     }
 
@@ -367,7 +372,9 @@ int z100_main() {
     /* if debug mode is active, wait for enter key to continue after each
     instruction */
     // if(debug_mode && ((instructions_done >= breakAtInstruction) || p8088->IP == 0x2FFC)) {
-		if(debug_mode && (instructions_done >= breakAtInstruction)) {
+		if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+			(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
+			(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
       // printf("\n");
 			printf("instructions done: %ld\n", instructions_done);
 			printf("Average cycles/instruction: %f\n", (total_cycles/instructions_done));
@@ -454,7 +461,9 @@ unsigned int z100_memory_read_(unsigned int addr) {
 				return_value = rom[addr&(ROM_SIZE-1)]&0xff;
 			else if (addr >= 0xc0000 && addr <= 0xeffff) {
         // DEBUG message
-        if(debug_mode && instructions_done >= breakAtInstruction) {
+        if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+					(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
+					(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
           printf("reading from video memory...\n");
         }
 				return_value = video->vram[addr-0xc0000]&0xff;
@@ -480,7 +489,9 @@ unsigned int z100_memory_read_(unsigned int addr) {
   // -> throw parity interrupt by writing a 1 to line 0 of IRQ input.
   if(zeroParity==1 && killParity==0 && byteParity==1) {
     // DEBUG message
-    if(debug_mode && instructions_done >= breakAtInstruction) {
+    if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+			(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
+			(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
       printf("THROW PARITY INTERRUPT\n");
     }
     // write 1 to IRQ line 0 (pin 0)
@@ -488,7 +499,9 @@ unsigned int z100_memory_read_(unsigned int addr) {
 	}
 
   // DEBUG message
-  if(debug_mode && instructions_done >= breakAtInstruction) {
+  if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+		(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
+		(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
     printf("read %X from memory address %X\n", return_value, addr);
   }
   return return_value;
@@ -496,7 +509,9 @@ unsigned int z100_memory_read_(unsigned int addr) {
 
 void z100_memory_write_(unsigned int addr, unsigned char data) {
   // DEBUG message
-  if(debug_mode && instructions_done >= breakAtInstruction) {
+  if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+		(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
+		(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
     printf("write %X to memory address %X\n", data, addr);
   }
   if(addr < RAM_SIZE) {
@@ -506,7 +521,9 @@ void z100_memory_write_(unsigned int addr, unsigned char data) {
 	else if(addr >= 0xc0000 && addr <= 0xeffff) {
     // write data to video memeory portion of RAM at address
     // DEBUG message
-    if(debug_mode && instructions_done >= breakAtInstruction) {
+    if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+			(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
+			(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
       printf("Writing to video memory...\n");
     }
     // video object has its own virtual RAM to hold video data
@@ -1027,6 +1044,7 @@ int main(int argc, char* argv[]) {
 
   char user_input_string[100];
   char valid_enter_key_press;
+	debug_mode = '0';
   /* user chooses DEBUG mode */
   // loop until a valid entry is input by the user ('1', '2', or '3')
   while(1) {
@@ -1048,35 +1066,80 @@ int main(int argc, char* argv[]) {
   // process user choice
   switch(user_input_string[0]) {
     case '1' :
-      debug_mode = FALSE;
+      debug_mode = '0';
       printf("%s\n", "\nNORMAL MODE");
       break;
     case '2' :
       printf("%s\n", "\nDEBUG MODE");
-      debug_mode = TRUE;
+			while(1) {
+				// check that the first character in the user's entry is '1' or '2'
+		    // also check that only one character was entered followed by a '\n'
+		    printf(
+					"%s", "\nChoose a DEBUG mode:\n\n  1. Break at Instruction number\n  "
+					"2. Break at Instruction Pointer (IP) value\n  3. EXIT\n\n>> ");
+		    fgets(user_input_string, 100, stdin);
+				if((user_input_string[0] < '1' || user_input_string[0] > '3') ||
+		      user_input_string[1] != '\n') {
+		      printf("%s\n", "INVALID ENTRY!\n");
+		      // back to top of loop to reprint menu
+		      continue;
+		    }
+				break;
+			}
 
-      // get instruction break point from user
-      while(1) {
-        printf("\nEnter an instruction number to break at.\n");
-        printf("%s", "(Negative integers will give undesired break points.)\n\n>> ");
-        fgets(user_input_string, 100, stdin);
-        // https://stackoverflow.com/questions/4072190/check-if-input-is-integer-type-in-c
-        if(sscanf(user_input_string, "%lu%c", &breakAtInstruction, &valid_enter_key_press) != 2 ||
-          valid_enter_key_press != '\n') {
-            printf("INVALID ENTRY: Enter a valid integer greater or equal to 0 (zero)!\n");
-            // back to top of loop to display prompt again
-            continue;
-        }
-        // valid entry - break from loop
-        break;
-      }
-      break;
+      debug_mode = user_input_string[0];
+
+			switch(debug_mode) {
+				case '1' :
+					while(1) {
+		        printf("\nEnter an INSTRUCTION NUMBER to break at (integer >= 0).\n");
+		        printf("%s", "(Negative integers will give undesired break points.)\n\n>> ");
+		        fgets(user_input_string, 100, stdin);
+		        // https://stackoverflow.com/questions/4072190/check-if-input-is-integer-type-in-c
+		        if(sscanf(user_input_string, "%lu%c", &breakAtInstruction, &valid_enter_key_press) != 2 ||
+		          valid_enter_key_press != '\n') {
+	            printf("INVALID ENTRY: Enter a valid integer greater or equal to 0 (zero)!\n");
+	            // back to top of loop to display prompt again
+	            continue;
+		        }
+		        // valid entry - break from loop
+		        break;
+		      }
+		  		break;
+				case '2' :
+					while(1) {
+						printf("\nEnter an INSTRUCTION POINTER (IP) value to break at"
+							" (hexadecimal value without \"0x\" >= 0. MAX 8 hex digits).\n");
+						printf("%s", "(Negative values will give undesired break points.)\n\n>> ");
+						fgets(user_input_string, 100, stdin);
+						// convert hex string to int
+						int ip_break_at = hex2int(user_input_string);
+						// https://stackoverflow.com/questions/4072190/check-if-input-is-integer-type-in-c
+						if(ip_break_at == -1) {
+							printf("INVALID ENTRY: Enter a valid hex value greater or equal to 0 (zero)!\n");
+							// back to top of loop to display prompt again
+							continue;
+						}
+						// valid entry - break from loop
+						breakAtInstruction = ip_break_at;
+						break;
+					}
+					break;
+				case '3' :
+		      printf("%s\n", "\nEXITING Z-100 EMULATOR PROGRAM...\n");
+		      exit(0);
+		      break;
+		    default :
+		      printf("\nERROR - undefined behavior - EXITING Z-100 EMULATOR PROGRAM...\n\n" );
+		      exit(0);
+			}
+			break;
     case '3' :
-      printf("%s\n", "\nEXITING PROGRAM...\n");
+      printf("%s\n", "\nEXITING Z-100 EMULATOR PROGRAM...\n");
       exit(0);
       break;
     default :
-      printf("\nERROR - undefined behavior - EXITING PROGRAM...\n\n" );
+      printf("\nERROR - undefined behavior - EXITING Z-100 EMULATOR PROGRAM...\n\n" );
       exit(0);
   }
 

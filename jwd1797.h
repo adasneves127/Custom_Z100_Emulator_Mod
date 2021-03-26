@@ -22,6 +22,7 @@ unsigned char commandRegister; // do not load when device is busy - except force
 /* holds device status information relevant to the previously executed command */
 unsigned char statusRegister;
 unsigned char CRCRegister;
+unsigned char controlLatch;
 
 // keep track of current byte being pointed to by the READ/WRITE head
 unsigned long disk_img_index_pointer;
@@ -149,6 +150,9 @@ int intSectorLength;
 int all_bytes_inputted; // indictes when an entire data field has been read
 int IDAM_byte_count;  // count for collecting the 6 IDAM bytes for READ ADDRESS
 int start_track_read_;
+
+// control latch
+int wait_enabled;
 
 } JWD1797;
 

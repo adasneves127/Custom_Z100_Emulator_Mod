@@ -113,6 +113,7 @@ void resetJWD1797(JWD1797* jwd_controller) {
 	jwd_controller->commandRegister = 0b00000000;
 	jwd_controller->statusRegister = 0b00000000;
 	jwd_controller->CRCRegister = 0b00000000;
+	jwd_controller->controlLatch = 0b00000000;
 
 	jwd_controller->disk_img_index_pointer = 0;
 	jwd_controller->rotational_byte_pointer = 6000;	// start at a few bytes before 0 index
@@ -215,6 +216,9 @@ void resetJWD1797(JWD1797* jwd_controller) {
 	jwd_controller->IDAM_byte_count = 0;
 	jwd_controller->start_track_read_ = 0;
 
+	// control latch initializations
+	jwd_controller->wait_enabled = 0;
+
 	// disk_content_array = diskImageToCharArray("z-dos-1.img", jwd_controller);
 	// TEST disk image to array function
 	// printByteArray(disk_content_array, 368640);
@@ -268,6 +272,7 @@ unsigned int readJWD1797(JWD1797* jwd_controller, unsigned int port_addr) {
 		// control latch reg port (write)
 		case 0xb4:
 			printf(" ** WARNING: Reading from WD1797 control latch port 0xB4 (write only)!\n");
+			r_val = jwd_controller->controlLatch;
 			break;
 		// controller status port (read)
 		case 0xb5:
@@ -323,7 +328,10 @@ void writeJWD1797(JWD1797* jwd_controller, unsigned int port_addr, unsigned int 
 			break;
 		// control latch port
 		case 0xb4:
-			printf("Writing to WD1797 control port.. ** NOT IMPLEMENTED **\n");
+			printf("Writing to WD1797 control port 0xB4 (ONLY wait_enabled option)\n");
+			jwd_controller->controlLatch = value;
+			// set wait enabled option according to bit 6
+			jwd_controller->wait_enabled = (jwd_controller->controlLatch >> 6) & 1;
 			break;
 		// controller status port
 		case 0xb5:
