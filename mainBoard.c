@@ -58,6 +58,7 @@ int killParity;
 int zeroParity;
 int byteParity;
 char debug_mode;
+int debug_mode_2_active;
 bool reset_irq6;
 unsigned char user_debug_mode_choice;
 unsigned char switch_s101_FF;
@@ -96,10 +97,17 @@ void timer_out_2();
 void timer_ext_2();
 // static gboolean update_debug_gui_values();
 
-// ============== MAIN Z100 FUNCTION ==============
+/*
+ ============== MAIN Z100 FUNCTION ==============
+*/
 int z100_main() {
 
-  // *** set up all hardware conpoenets on the main board ***
+	// turn debug mode 2 off until program counter target has been reached
+	debug_mode_2_active = 0;
+
+  /*
+		*** set up all hardware conpoenets on the main board ***
+	*/
 
   // initialize keyboard - create a keyboard object
 	keybrd = newKeyboard();
@@ -164,16 +172,16 @@ int z100_main() {
   jwd1797 = newJWD1797();
   resetJWD1797(jwd1797);
 
-  // this creates a thread running from the debug window function
+  /* this creates a thread running from the debug window function */
   // pthread_create(&dbug_window_thread, NULL, run_debug_window, NULL);
   // run_debug_window();
   // update values displayed in the debug gui
   // update_debug_gui_values();
   // g_main_context_invoke (NULL, update_debug_gui_values, NULL);
 
-  // set processor selection to 8085
-  active_processor = pr8085;
-  // initialize all counts to zero
+  /*
+		***** initialize all counts to zero *****
+	*/
   instructions_done = 0;
   // cycles_done = 0;
   // VSYNC_cycle_count = 0;
@@ -184,24 +192,36 @@ int z100_main() {
 	last_instruction_time_us = 0.0;
 	// reset_irq6 = false;
 
-  // ==== RUN THE PROCESSORS ====
+	// set processor selection to 8085
+  active_processor = pr8085;
+
+  /*
+	 >>>> RUN THE PROCESSORS <<<<
+	*/
   printf("Start running processors..\n");
   // --- run the processor(s) forever ---
   while(1) {
 
+		// check if instruction pointer (IP) has been reached for dubug mode 2
+		if(debug_mode == '2') {
+			if((active_processor == pr8085) && (p8085.PC == breakAtInstruction)) {
+				debug_mode_2_active = 1;
+			}
+			else if((active_processor == pr8088) && (p8088->IP == breakAtInstruction)) {
+				debug_mode_2_active = 1;
+			}
+		}
     // if active processor is the 8085
     if(active_processor == pr8085) {
       doInstruction8085(&p8085);
 			last_instruction_cycles = p8085.cycles;
       instructions_done++;
 			if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-				(debug_mode == '2' && (p8085.PC >= breakAtInstruction))) {
+				(debug_mode_2_active == 1)) {
 				printf("instructions done: %ld\n", instructions_done);
 	      printf("PC = %X, opcode = %X, inst = %s\n",p8085.PC,p8085.opcode,p8085.name);
-	      // int A, B, C, D, E, H, L, SP, PC;
 	      printf("A = %X, B = %X, C = %X, D = %X, E = %X, H = %X, L = %X, SP = %X\n",
 	        p8085.A, p8085.B, p8085.C, p8085.D, p8085.E, p8085.H, p8085.L, p8085.SP);
-	      // int c, p, ac, z, s, i, m75, m65, m55;
 	      printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
 	        p8085.c, p8085.p, p8085.ac, p8085.z, p8085.s);
 	      printf("i = %X, m75 = %X, m65 = %X, m55 = %X\n",
@@ -223,28 +243,24 @@ int z100_main() {
       // cycles_done = cycles_done + p8088->cycles;
       // only print processor status if debug conditions are met
       if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-				(debug_mode == '2' && (p8088->IP >= breakAtInstruction))) {
+				(debug_mode_2_active == 1)) {
         printf("instructions done: %ld\n", instructions_done);
         printf("IP = %X, opcode = %X, inst = %s\n",
           p8088->IP,p8088->opcode,p8088->name_opcode);
         printf("value1 = %X, value2 = %X, result = %X cycles = %d\n",
           p8088->operand1,p8088->operand2,p8088->op_result,p8088->cycles);
-        // unsigned int AL, AH, BL, BH, CL, CH, DL, DH, SP, BP, DI, SI, IP;
-      	// unsigned int CS, SS, DS, ES;
         printf("AL = %X, AH = %X, BL = %X, BH = %X, CL = %X, CH = %X, DL = %X, DH = %X\n"
           "SP = %X, BP = %X, DI = %X, SI = %X\n"
           "CS = %X, SS = %X, DS = %X, ES = %X\n",
           p8088->AL, p8088->AH,p8088->BL,p8088->BH,p8088->CL,p8088->CH,p8088->DL,
           p8088->DH,p8088->SP,p8088->BP,p8088->DI,p8088->SI,p8088->CS,p8088->SS,
           p8088->DS,p8088->ES);
-        // unsigned int c, p, ac, z, s, t, i, d, o;
         printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
           p8088->c,p8088->p,p8088->ac,p8088->z,p8088->s);
         printf("trap = %X, int = %X, dir = %X, overflow = %X\n",
           p8088->t,p8088->i,p8088->d,p8088->o);
       }
 		}
-    // printf("\n");
 
     /* THIS IS A BETTER WAY TO TIME THE INTERRUPT
     // update VSYNC and timer counts with 8088 cycles
@@ -344,37 +360,13 @@ int z100_main() {
       display();
     }
 
-    // *** DEBUG - BOOT Command ***
-    /* **SCRIPT a key press 'b' at the hand prompt to trigger the
-    BOOT command this will happen very shortly after the point at which the hand
-    prompt is waiting for a command entry from the user.
-    ** 1093881 is the number of instructions is takes to reach the hand prompt
-    and check the keyboard status one time */
-    if(debug_mode == '1' && (instructions_done == (1093881 + 5))) {
-      keyaction(keybrd, 'b');
-      // keyaction(keybrd, '\n');
-    }
-		// *** DEBUG - BOOT Command ***
-		/* **SCRIPT a key press 'ENTER' at the hand prompt to trigger the
-		BOOT command. This will happen after the "Boot" string has been written
-		to the screen and the ROM prompt is waiting for either BOOT command
-		parameters or an 'ENTER' keypress to initiate the default disk controller
-		to boot the operating system from a disk.
-		** Instruction 1098855 is a point at which the keyboard status loop has
-		been reached and has been running for a significant amount of
-		iterations */
-		if(debug_mode == '1' && (instructions_done == (1098855))) {
-      keyaction(keybrd, 0x0D);
-    }
-
     // update_debug_gui_values();
 
     /* if debug mode is active, wait for enter key to continue after each
     instruction */
     // if(debug_mode && ((instructions_done >= breakAtInstruction) || p8088->IP == 0x2FFC)) {
 		if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-			(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
-			(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
+			(debug_mode_2_active == 1)) {
       // printf("\n");
 			printf("instructions done: %ld\n", instructions_done);
 			printf("Average cycles/instruction: %f\n", (total_cycles/instructions_done));
@@ -462,10 +454,7 @@ unsigned int z100_memory_read_(unsigned int addr) {
 			else if (addr >= 0xc0000 && addr <= 0xeffff) {
         // DEBUG message
         if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-					(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
-					(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
-          printf("reading from video memory...\n");
-        }
+					(debug_mode_2_active == 1)) {printf("reading from video memory...\n");}
 				return_value = video->vram[addr-0xc0000]&0xff;
       }
 			else
@@ -490,8 +479,7 @@ unsigned int z100_memory_read_(unsigned int addr) {
   if(zeroParity==1 && killParity==0 && byteParity==1) {
     // DEBUG message
     if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-			(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
-			(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
+			(debug_mode_2_active == 1)) {
       printf("THROW PARITY INTERRUPT\n");
     }
     // write 1 to IRQ line 0 (pin 0)
@@ -500,8 +488,7 @@ unsigned int z100_memory_read_(unsigned int addr) {
 
   // DEBUG message
   if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-		(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
-		(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
+		(debug_mode_2_active == 1)) {
     printf("read %X from memory address %X\n", return_value, addr);
   }
   return return_value;
@@ -510,8 +497,7 @@ unsigned int z100_memory_read_(unsigned int addr) {
 void z100_memory_write_(unsigned int addr, unsigned char data) {
   // DEBUG message
   if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-		(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
-		(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
+		(debug_mode_2_active == 1)) {
     printf("write %X to memory address %X\n", data, addr);
   }
   if(addr < RAM_SIZE) {
@@ -522,8 +508,7 @@ void z100_memory_write_(unsigned int addr, unsigned char data) {
     // write data to video memeory portion of RAM at address
     // DEBUG message
     if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-			(debug_mode == '2' && (active_processor == pr8085) && (p8085.PC >= breakAtInstruction)) ||
-			(debug_mode == '2' && (active_processor == pr8088) && (p8088->IP >= breakAtInstruction))) {
+			(debug_mode_2_active == 1)) {
       printf("Writing to video memory...\n");
     }
     // video object has its own virtual RAM to hold video data
@@ -976,8 +961,8 @@ void z100_port_write(unsigned int address, unsigned char data) {
     // S101 DIP Switch - (Page 2.8 in Z100 technical manual for pin defs)
     // NOTE: since this is a PHYSICAL DIP switch - this case should never be called
     case 0xFF:
-      // printf("ERROR: CAN NOT WRITE to DIP_switch_s101_FF port at address %X\n",
-			// 	address);
+      printf("ERROR: CAN NOT WRITE to DIP_switch_s101_FF port at address %X\n",
+				address);
       break;
     // unimplemented port
     default:
@@ -1009,27 +994,16 @@ void initialize_z100_ports() {
 }
 
 // the timer functions below serve as stand-in functions
-void timer_out_0() {
-  printf("timer out 0\n");
-}
-void timer_ext_0() {
-  printf("timer ext 0\n");
-}
-void timer_out_1() {
-  printf("timer out 1\n");
-}
-void timer_ext_1() {
-  printf("timer ext 1\n");
-}
-void timer_out_2() {
-  printf("timer out 2\n");
-}
-void timer_ext_2() {
-  printf("timer ext 2\n");
-}
+void timer_out_0() {printf("timer out 0\n");}
+void timer_ext_0() {printf("timer ext 0\n");}
+void timer_out_1() {printf("timer out 1\n");}
+void timer_ext_1() {printf("timer ext 1\n");}
+void timer_out_2() {printf("timer out 2\n");}
+void timer_ext_2() {printf("timer ext 2\n");}
+
 
 // --------------------------------------------
-/* MAIN FUNCTIONS */
+							/* MAIN FUNCTIONS */
 // --------------------------------------------
 
 // emulator thread function

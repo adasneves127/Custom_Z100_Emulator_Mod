@@ -87,7 +87,7 @@ void renderScreen(Video* v, unsigned int* pixels) {
 		height of 25 characters, this equates to 225 scan lines. However, with the
 		extra 7 lines per row of characters, there are actually a total of 400 scan
 		lines of addresses (225 + (25 * 7)) */
-	printf("%d\n", v->addressLatch);
+	// printf("%s%d\n","Video Address Latch: ", v->addressLatch);
 
 	for(int actual_scan_line = 0; actual_scan_line < 225 + (25*7); actual_scan_line++) {
 
