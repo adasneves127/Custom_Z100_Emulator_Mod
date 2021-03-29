@@ -11,6 +11,8 @@ typedef struct
 	int interrupt_deferred, interrupts;
 	int halt;
 	int enable_interrupts;
+	int data_request_x86_;
+	int wait_state_x86;
 
 	unsigned int opcode, value, operand1, operand2, immediate, cycles;
 	int op_result;

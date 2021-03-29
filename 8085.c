@@ -11,11 +11,12 @@ void reset8085(P8085* p8085)
 	p8085->s=p8085->p=0;
 	p8085->i=0;
 	p8085->halted=0;
+	p8085->wait_state=0;
 }
 
 unsigned int fetch(P8085* p8085)
 {
-	//	unsigned int r=ram[p8085->PC];
+	// unsigned int r=ram[p8085->PC];
 	// call mainboard function here...r=p8085->memory
 	// unsigned int r=p8085->memory[p8085->PC];
 	unsigned int r=z100_memory_read_(p8085->PC);
@@ -52,6 +53,20 @@ unsigned char port_read(P8085* p8085, unsigned int address)
 	return z100_port_read(address);
 }
 
+void check_wait_state(P8085* p8085) {
+	// get current and (PC) next (PC+1) byte from memory
+	unsigned int pre_check_byte_1=z100_memory_read_(p8085->PC);
+	unsigned int pre_check_byte_2=z100_memory_read_(p8085->PC+1);
+	/* mainBoard.c function - glue logic for FD-1797 Floppy Disk Controller */
+	if(pr8085_FD1797WaitStateCondition(pre_check_byte_1, pre_check_byte_2) &&
+		p8085->data_request_ == 0) {
+		p8085->wait_state = 1;
+	}
+	else {
+		p8085->wait_state = 0;
+	}
+}
+
 void halt(P8085* p8085)
 {
 	p8085->halted = 1;
@@ -73,13 +88,17 @@ unsigned int rim(P8085* p8085)
 
 void doInstruction8085(P8085* p8085)
 {
-	if(p8085->halted) {
-		return;
-	}
+	if(p8085->halted) {p8085->cycles=1; return;}
+
+	check_wait_state(p8085);
+	if(p8085->wait_state) {p8085->cycles=1; return;}
+
+	// if not halted or wait_state, continue with executing instruction
 	unsigned int cyc=0;
 	unsigned int m=0,t=0;
 	unsigned int value,value2,result;
 	char* name;
+
 	unsigned int opcode=fetch(p8085);
 	// stuff opcode into instance variable "opcode" contained in the 8085 header file
 	p8085->opcode = opcode;
@@ -1475,5 +1494,7 @@ void doInstruction8085(P8085* p8085)
 			p8085->PC=0x38;
 			break;
 	}
+
 	p8085->name=name;
+	p8085->cycles=cyc;
 }

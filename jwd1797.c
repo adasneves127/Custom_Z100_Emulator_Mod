@@ -29,16 +29,16 @@
 #define HLD_IDLE_INDEX_COUNT_LIMIT 15
 // head load timing (this can be set from 30-100 ms, depending on drive)
 // set to 45 ms (45,000 us)
-#define HEAD_LOAD_TIMING_LIMIT 45.0*1000
+#define HEAD_LOAD_TIMING_LIMIT 100
 // verify time is 30 milliseconds for a 1MHz clock
 #define VERIFY_HEAD_SETTLING_LIMIT 30.0*1000
 // E (15 ms delay) for TYPE II and III commands (30 ms (30*1000 us) for 1 MHz clock)
-#define E_DELAY_LIMIT 500.0
+#define E_DELAY_LIMIT 100
 /* time limit for data shift register to assemble byte in data register
 	(simulated). This value is based on 'https://www.hp9845.net/9845/projects/fdio/#hp_formats'
 	where the 5.25" DS/DD disk is reported to have a 300 kbps data rate. */
 // #define ASSEMBLE_DATA_BYTE_LIMIT 26.67	// ~ 3.33375 us/bit
-// (was set to 30.1 us)
+// (was set to 30.1 us) - ** should be 31.27 us **
 #define ROTATIONAL_BYTE_READ_LIMIT 2	// ~ 3.9 us/bit
 /* number of bytes after ID field search encounters four 0x00 bytes. This
  	should be 16 bytes according to WD-1797 docs. After 16 bytes the search
@@ -332,6 +332,9 @@ void writeJWD1797(JWD1797* jwd_controller, unsigned int port_addr, unsigned int 
 			jwd_controller->controlLatch = value;
 			// set wait enabled option according to bit 6
 			jwd_controller->wait_enabled = (jwd_controller->controlLatch >> 6) & 1;
+			if(jwd_controller->wait_enabled) {
+				printf("%s\n", "** FD-1797 Wait Enabled **");
+			}
 			break;
 		// controller status port
 		case 0xb5:

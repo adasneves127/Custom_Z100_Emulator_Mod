@@ -34,6 +34,7 @@
 
 enum active_processor{pr8085, pr8088};
 enum active_processor active_processor;
+int processor_wait_state;
 
 // for determing average cycles per instruction
 double total_cycles;
@@ -194,7 +195,7 @@ int z100_main() {
 
 	// set processor selection to 8085
   active_processor = pr8085;
-
+	processor_wait_state = 0;
   /*
 	 >>>> RUN THE PROCESSORS <<<<
 	*/
@@ -211,8 +212,11 @@ int z100_main() {
 				debug_mode_2_active = 1;
 			}
 		}
+
     // if active processor is the 8085
     if(active_processor == pr8085) {
+			// update data request signal from JWD1797 drq pin
+			p8085.data_request_ = jwd1797->drq;
       doInstruction8085(&p8085);
 			last_instruction_cycles = p8085.cycles;
       instructions_done++;
@@ -230,9 +234,8 @@ int z100_main() {
     }
     // if the active processor is the 8088
     else if(active_processor == pr8088) {
-			if(jwd1797->wait_enabled) {
-				printf("%s\n", "WD1797 wait enabled option is active..");
-			}
+			// update data request signal from JWD1797 drq pin
+			p8088->data_request_x86_ = jwd1797->drq;
       doInstruction8088(p8088);
 			last_instruction_cycles = p8088->cycles;
 			// add the number of cycles the last instruction took to the total cycles
@@ -374,7 +377,11 @@ int z100_main() {
 			printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
 				jwd1797->rotational_byte_pointer);
 			printf("%s%02X\n", "Current Byte: ", getFDiskByte(jwd1797));
+			printf("%s%f\n", "HEAD LOAD Timer: ", jwd1797->HLT_timer);
 			printf("%s%f\n", "E Delay Timer: ", jwd1797->e_delay_timer);
+			printf("%s", "FD-1797 Status Reg.: " );
+			print_bin8_representation(jwd1797->statusRegister);
+			printf("%s", "Disk ID Field Data: " );
 			printByteArray(jwd1797->id_field_data, 6);
       getchar();
     }
@@ -1126,4 +1133,21 @@ int main(int argc, char* argv[]) {
   pthread_create(&emulator_thread, NULL, mainBoardThread, NULL);
   // start GTK window thread
   screenLoop();
+}
+
+int pr8085_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
+	// if 8085 "in" instruction and reading from WD1797 data register (port 0xB3)
+	if((opCode == 0xdb) && (port_num == 0xb3)) {
+		return 1;
+	}
+	return 0;
+}
+
+int pr8088_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
+	// if 8088 "in" instruction and reading from WD1797 data register (port 0xB3)
+	if(((opCode == 0xe4) || (opCode == 0xe5) || (opCode == 0xec) || (opCode == 0xed))
+		&& (port_num == 0xb3)) {
+		return 1;
+		}
+	return 0;
 }

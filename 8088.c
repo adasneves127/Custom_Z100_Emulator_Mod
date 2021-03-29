@@ -125,6 +125,8 @@ void reset8088(P8088* p8088)
 	p8088->c=p8088->p=p8088->ac=p8088->z=p8088->s=p8088->t=p8088->i=p8088->d=p8088->o=0;
 	p8088->halt=0;
 	p8088->name_opcode="";
+	p8088->data_request_x86_=0;
+	p8088->wait_state_x86=0;
 	prefetch_flush(p8088);
 }
 
@@ -502,8 +504,36 @@ unsigned int pop(P8088* p8088)
 	return value;
 }
 
+void check_wait_state_x86(P8088* p8088) {
+	// get current and (PC) next (PC+1) byte from memory
+	unsigned int pre_check_byte_1=memory_read_x86(p8088,((p8088->CS<<4)+((p8088->IP)&0xffff))&0xfffff);
+	unsigned int pre_check_byte_2=0;
+	// 0xe4 = IN AL<-imm8 | 0xe5 = IN AX<-imm8
+	// port # = imm8 - get next memory byte for port address
+	if((pre_check_byte_1 == 0xe4) || (pre_check_byte_1 == 0xe5)) {
+		pre_check_byte_2=memory_read_x86(p8088,((p8088->CS<<4)+((p8088->IP+1)&0xffff))&0xfffff);
+	}
+	// 0xec = IN AL<-DX | 0xed = IN AX<-DX
+	// port # = DX - get DX for port address
+	else if((pre_check_byte_1 == 0xec) || (pre_check_byte_1 == 0xed)) {
+		pre_check_byte_2=(p8088->DH<<8)|p8088->DL;
+	}
+	/* mainBoard.c function - glue logic for FD-1797 Floppy Disk Controller */
+	if(pr8088_FD1797WaitStateCondition(pre_check_byte_1, pre_check_byte_2) &&
+		p8088->data_request_x86_ == 0) {
+		p8088->wait_state_x86 = 1;
+	}
+	else {
+		p8088->wait_state_x86 = 0;
+	}
+}
+
 void doInstruction8088(P8088* p8088)
 {
+
+	check_wait_state_x86(p8088);
+	if(p8088->wait_state_x86) {p8088->cycles=1; return;}
+
 	int isprefix,value1,value2,result;
 
 	p8088->operand1=0;

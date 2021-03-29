@@ -9,6 +9,12 @@ typedef struct
 	int opcode, value, immediate, cycles;
 	char* name;
 
+	/* signal for external device data read request (used for FD-1797 Floppy Disk
+		controller */
+	int data_request_;
+
+	int wait_state;
+
 	unsigned char* memory;
 } P8085;
 
