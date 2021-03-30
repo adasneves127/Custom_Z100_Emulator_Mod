@@ -532,7 +532,7 @@ void doInstruction8088(P8088* p8088)
 {
 
 	check_wait_state_x86(p8088);
-	if(p8088->wait_state_x86) {p8088->cycles=1; return;}
+	if(p8088->wait_state_x86) {return;}
 
 	int isprefix,value1,value2,result;
 

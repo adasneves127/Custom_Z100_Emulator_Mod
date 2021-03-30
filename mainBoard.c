@@ -28,7 +28,7 @@
 /* (20 cycles = 4 microseconds, EDIT - 8253 timer is connected to a 250kHz
 	clock according to page 2.80 Z-100 Technical manual (hardware) - clocked
 	every 120 cycles */
-#define E8253_TIMER_CYCLE_LIMIT 120
+#define E8253_TIMER_CYCLE_LIMIT 20
 // (5 CPU cycles = 1 microsecond)
 // #define JWD1797_CYCLE_LIMIT 5
 
@@ -36,8 +36,6 @@ enum active_processor{pr8085, pr8088};
 enum active_processor active_processor;
 int processor_wait_state;
 
-// for determing average cycles per instruction
-double total_cycles;
 // rough clock to keep track of time passing (us) as instructions are executed
 double total_time_elapsed;
 
@@ -46,6 +44,7 @@ unsigned long instructions_done;
 unsigned long breakAtInstruction;
 // unsigned int VSYNC_cycle_count;
 unsigned int e8253_timer_cycle_count;
+unsigned int e8253_timer_overage;
 // unsigned int jwd1797_cycle_count;
 int last_instruction_cycles;
 double last_instruction_time_us;
@@ -97,6 +96,14 @@ void timer_ext_1();
 void timer_out_2();
 void timer_ext_2();
 // static gboolean update_debug_gui_values();
+void handleDebug2Mode();
+void handle8085InstructionCycle();
+void handle8088InstructionCycle();
+void simulateVSYNCInterrupt();
+void handle8253TimerClockCycle();
+void updateZ100Screen();
+void handleDebugOutput();
+void fD1797DebugOutput();
 
 /*
  ============== MAIN Z100 FUNCTION ==============
@@ -187,7 +194,7 @@ int z100_main() {
   // cycles_done = 0;
   // VSYNC_cycle_count = 0;
   e8253_timer_cycle_count = 0;
-	total_cycles = 0.0;
+	e8253_timer_overage = 0;
 	total_time_elapsed = 0.0;
 	last_instruction_cycles = 0;
 	last_instruction_time_us = 0.0;
@@ -199,213 +206,66 @@ int z100_main() {
   /*
 	 >>>> RUN THE PROCESSORS <<<<
 	*/
-  printf("Start running processors..\n");
+  printf("\n\nStart running processors..\n\n");
   // --- run the processor(s) forever ---
   while(1) {
 
 		// check if instruction pointer (IP) has been reached for dubug mode 2
-		if(debug_mode == '2') {
-			if((active_processor == pr8085) && (p8085.PC == breakAtInstruction)) {
-				debug_mode_2_active = 1;
-			}
-			else if((active_processor == pr8088) && (p8088->IP == breakAtInstruction)) {
-				debug_mode_2_active = 1;
-			}
-		}
-
+		handleDebug2Mode();
     // if active processor is the 8085
     if(active_processor == pr8085) {
-			// update data request signal from JWD1797 drq pin
-			p8085.data_request_ = jwd1797->drq;
-      doInstruction8085(&p8085);
-			last_instruction_cycles = p8085.cycles;
-      instructions_done++;
-			if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-				(debug_mode_2_active == 1)) {
-				printf("instructions done: %ld\n", instructions_done);
-	      printf("PC = %X, opcode = %X, inst = %s\n",p8085.PC,p8085.opcode,p8085.name);
-	      printf("A = %X, B = %X, C = %X, D = %X, E = %X, H = %X, L = %X, SP = %X\n",
-	        p8085.A, p8085.B, p8085.C, p8085.D, p8085.E, p8085.H, p8085.L, p8085.SP);
-	      printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
-	        p8085.c, p8085.p, p8085.ac, p8085.z, p8085.s);
-	      printf("i = %X, m75 = %X, m65 = %X, m55 = %X\n",
-	        p8085.i, p8085.m75, p8085.m65, p8085.m55);
-			}
+			handle8085InstructionCycle();
     }
     // if the active processor is the 8088
     else if(active_processor == pr8088) {
-			// update data request signal from JWD1797 drq pin
-			p8088->data_request_x86_ = jwd1797->drq;
-      doInstruction8088(p8088);
-			last_instruction_cycles = p8088->cycles;
-			// add the number of cycles the last instruction took to the total cycles
-			total_cycles += p8088->cycles;
-      instructions_done++;
-      /* increment cycles_done to add the number of cycles the current
-      instruction took */
-      // cycles_done = cycles_done + p8088->cycles;
-      // only print processor status if debug conditions are met
-      if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-				(debug_mode_2_active == 1)) {
-        printf("instructions done: %ld\n", instructions_done);
-        printf("IP = %X, opcode = %X, inst = %s\n",
-          p8088->IP,p8088->opcode,p8088->name_opcode);
-        printf("value1 = %X, value2 = %X, result = %X cycles = %d\n",
-          p8088->operand1,p8088->operand2,p8088->op_result,p8088->cycles);
-        printf("AL = %X, AH = %X, BL = %X, BH = %X, CL = %X, CH = %X, DL = %X, DH = %X\n"
-          "SP = %X, BP = %X, DI = %X, SI = %X\n"
-          "CS = %X, SS = %X, DS = %X, ES = %X\n",
-          p8088->AL, p8088->AH,p8088->BL,p8088->BH,p8088->CL,p8088->CH,p8088->DL,
-          p8088->DH,p8088->SP,p8088->BP,p8088->DI,p8088->SI,p8088->CS,p8088->SS,
-          p8088->DS,p8088->ES);
-        printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
-          p8088->c,p8088->p,p8088->ac,p8088->z,p8088->s);
-        printf("trap = %X, int = %X, dir = %X, overflow = %X\n",
-          p8088->t,p8088->i,p8088->d,p8088->o);
-      }
+			handle8088InstructionCycle();
 		}
 
-    /* THIS IS A BETTER WAY TO TIME THE INTERRUPT
-    // update VSYNC and timer counts with 8088 cycles
-    VSYNC_cycle_count = VSYNC_cycle_count + p8088->cycles;
-    e8253_timer_cycle_count = e8253_timer_cycle_count + p8088->cycles;
-
-    // simulate interrupts
-    // simulate VSYNC interrupt on I6 (keyboard video display and light pen int)
-    if(reset_irq6 == true) {
-      // set the irq6 pin to low
-      e8259_set_irq6(e8259_master, 0);
-      printf("%s\n", "VSYNC interrupt reset - irq6 LOW");
-      // clear VSYNC reset irq6 trigger
-      reset_irq6 = false;
-    }
-    if(VSYNC_cycle_count >= VSYNC_CYCLE_LIMIT) {
-      // set the irq6 pin on the master 8259 int controller to high
-      e8259_set_irq6(e8259_master, 1);
-      printf("%s\n", "VSYNC interrupt - irq6 HIGH");
-      // reset VSYNC cycle count
-      VSYNC_cycle_count = 0;
-      // set irq6 reset trigger
-      reset_irq6 = true;
-    }
-    // clock the 8253 timer - this should be ~ every 4 microseconds
-    if(e8253_timer_cycle_count >= E8253_TIMER_CYCLE_LIMIT) {
-      e8253_clock(e8253, 1);
-      // reset timer cycle count
-      e8253_timer_cycle_count = 0;
-    }
-    */
-
-    /* THIS IS THE LESS BETTER WAY TO TIME THE INTERRUPTS */
-    // simulate VSYNC interrupt on I6 (keyboard video display and light pen int)
-    if(instructions_done%10000 == 10000-2) {
-			// printf("%s\n", "*** KEYINT or DSPYINT/VSYNC interrupt occurred - I6 from Master PIC ***");
-      // set the irq6 pin on the master 8259 int controller to high
-      e8259_set_irq6(e8259_master, 1);
-    }
-    else if(instructions_done%10000 == 10000-1) {
-      // set the irq6 pin to low
-      e8259_set_irq6(e8259_master, 0);
-    }
-
-		// *** ON AVERAGE 2.284 microseconds pass with each instruction executed
-
-    /* clock the 8253 timer - this should be ~ every 4 microseconds
-     but here it happens on every instruction - although the number of cycles
-     varies with each type of instruction  - EDIT: change clock cycle of timer
-		 to clock every 20 cycles ~ (4us at 5MHz)
-		 EDIT 2 - according to page 2.80 of Z-100 technical manual, the timer is
-		 clocked by a 250kHz clock. */
-		// update timer cycle count
-		e8253_timer_cycle_count += last_instruction_cycles;
-		if(e8253_timer_cycle_count >= E8253_TIMER_CYCLE_LIMIT) {
-			e8253_clock(e8253, 1);
-			e8253_timer_cycle_count = 0;
-		}
-
-
-		/* cycle the JWD1797. The JWD1797 is driven by a 1 MHz clock in the Z-100.
-			Thus, it should be cycled every 1 microsecond or every five CPU (5 MHz)
-			cycles. Considering it will be cycled after every instruction, the time
-			added to the internal JWD1797 timer mechanisms will be determined
-			based on how many cycles the previous instruction took.
-			*/
 		// calculate time passed with the last instruction execution
 		// number of cycles for last instruction * 0.2 microseconds (5 MHz clock)
 		last_instruction_time_us = last_instruction_cycles * 0.2;
 		// increment the time total_time_elapsed based on the last instruction time
 		total_time_elapsed += last_instruction_time_us;
-		// printf("%s%f\n", "last instrcution time (microseconds): ", last_instruction_time_us);
+
+    /* simulate VSYNC interrupt on I6 (keyboard video display and light pen int)
+			roughly every 10,000 instructions - This satisfies BIOS diagnostics,
+			but the interrupt routine is not used to display the Z-100 screen
+		*/
+    simulateVSYNCInterrupt();
+
+    /* clock the 8253 timer - this should be ~ every 4 microseconds
+		 - according to page 2.80 of Z-100 technical manual, the timer is
+		 clocked by a 250kHz clock (every 20 cycles of the 5 Mhz main clock)
+		 The e8253 timer is incremented based on the last instruction cycle count.
+		*/
+		handle8253TimerClockCycle();
+
+		/* cycle the JWD1797. The JWD1797 is driven by a 1 MHz clock in the Z-100.
+			Thus, it should be cycled every 1 microsecond or every five CPU (5 MHz)
+			cycles. Considering it will be cycled after every instruction, the time
+			added to the internal JWD1797 timer mechanisms will be determined by
+			how many cycles the previous instruction took.
+		*/
 		doJWD1797Cycle(jwd1797, last_instruction_time_us);
 
-		// DEBUG
-		// if(debug_mode && instructions_done >= breakAtInstruction) {
-			// print index info
-			// printf("\nJWD1797 commandType: %d\n"
-			// 	"us: %lf\n"
-			// 	"indexTime: %lf\n"
-			// 	"index: %d\n",
-			// 	jwd1797->commandType,
-			// 	jwd1797->us,
-			// 	jwd1797->indexTime,
-			// 	jwd1797->index);
-			// // print JWD1797 status register
-			// print_bin8_representation(jwd1797->status);
-    // }
-
-
     // update the screen every 100,000 instructions
-    if(instructions_done%100000 == 0) {
-      /* update pixel array using current VRAM state using renderScreen()
-        function from video.c */
-      renderScreen(video, pixels);
-      // draw pixels to the GTK window using display() function from screen.c
-      display();
-    }
+    updateZ100Screen();
 
     // update_debug_gui_values();
 
     /* if debug mode is active, wait for enter key to continue after each
     instruction */
-    // if(debug_mode && ((instructions_done >= breakAtInstruction) || p8088->IP == 0x2FFC)) {
-		if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-			(debug_mode_2_active == 1)) {
-      // printf("\n");
-			printf("instructions done: %ld\n", instructions_done);
-			printf("Average cycles/instruction: %f\n", (total_cycles/instructions_done));
-			printf("TIME ELAPSED: %f\n", total_time_elapsed);
-			printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
-				jwd1797->rotational_byte_pointer);
-			printf("%s%02X\n", "Current Byte: ", getFDiskByte(jwd1797));
-			printf("%s%f\n", "HEAD LOAD Timer: ", jwd1797->HLT_timer);
-			printf("%s%f\n", "E Delay Timer: ", jwd1797->e_delay_timer);
-			printf("%s", "FD-1797 Status Reg.: " );
-			print_bin8_representation(jwd1797->statusRegister);
-			printf("%s", "Disk ID Field Data: " );
-			printByteArray(jwd1797->id_field_data, 6);
-      getchar();
-    }
-
-		/* Use this code block to break when the instruction pointer is at a
-		certain value */
-		// if(p8088->IP == 0x3048) {
-		// 	printf("instructions done: %ld\n", instructions_done);
-		// 	printf("Average cycles/instruction: %f\n", (total_cycles/instructions_done));
-		// 	printf("TIME ELAPSED: %f\n", total_time_elapsed);
-		// 	printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
-		// 		jwd1797->rotational_byte_pointer);
-		// 	printByteArray(jwd1797->id_field_data, 6);
-    //   getchar();
-    // }
+		handleDebugOutput();
   }
-
-  // return from MAIN
+  // return from z100_main() (will not return because of processor loop)
   return 0;
 }
+
 
 //=============================================================================
 //                         ** function definitions **
 //=============================================================================
+
 void interruptFunctionCall(void* v, int number) {
   if(number == 0) {
     return;
@@ -1008,10 +868,165 @@ void timer_ext_1() {printf("timer ext 1\n");}
 void timer_out_2() {printf("timer out 2\n");}
 void timer_ext_2() {printf("timer ext 2\n");}
 
+int pr8085_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
+	// if 8085 "in" instruction and reading from WD1797 data register (port 0xB3)
+	if((opCode == 0xdb) && (port_num == 0xb3)) {
+		return 1;
+	}
+	return 0;
+}
 
-// --------------------------------------------
-							/* MAIN FUNCTIONS */
-// --------------------------------------------
+int pr8088_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
+	// if 8088 "in" instruction and reading from WD1797 data register (port 0xB3)
+	if(((opCode == 0xe4) || (opCode == 0xe5) || (opCode == 0xec) || (opCode == 0xed))
+		&& (port_num == 0xb3)) {
+		return 1;
+		}
+	return 0;
+}
+
+void handleDebug2Mode() {
+	if(debug_mode == '2') {
+		if((active_processor == pr8085) && (p8085.PC == breakAtInstruction)) {
+			debug_mode_2_active = 1;
+		}
+		else if((active_processor == pr8088) && (p8088->IP == breakAtInstruction)) {
+			debug_mode_2_active = 1;
+		}
+	}
+}
+
+void handle8085InstructionCycle() {
+	// update data request signal from JWD1797 drq pin
+	p8085.data_request_ = jwd1797->drq;
+	doInstruction8085(&p8085);
+	// if processor is NOT in a wait state
+	if(p8085.wait_state == 0) {
+		instructions_done++;
+		last_instruction_cycles = p8085.cycles;
+	}
+	/* processor is in a wait state
+		- no instruction done
+		- 1 clock cycle passes (200 ns for 5 MHz clock) */
+	else {
+		last_instruction_cycles = 1;
+	}
+	if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+		(debug_mode_2_active == 1)) {
+		printf("PC = %X, opcode = %X, inst = %s\n",p8085.PC,p8085.opcode,p8085.name);
+		printf("A = %X, B = %X, C = %X, D = %X, E = %X, H = %X, L = %X, SP = %X\n",
+			p8085.A, p8085.B, p8085.C, p8085.D, p8085.E, p8085.H, p8085.L, p8085.SP);
+		printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
+			p8085.c, p8085.p, p8085.ac, p8085.z, p8085.s);
+		printf("i = %X, m75 = %X, m65 = %X, m55 = %X\n",
+			p8085.i, p8085.m75, p8085.m65, p8085.m55);
+	}
+}
+
+void handle8088InstructionCycle() {
+	// update data request signal from JWD1797 drq pin
+	p8088->data_request_x86_ = jwd1797->drq;
+	doInstruction8088(p8088);
+	// if processor is NOT in a wait state
+	if(p8088->wait_state_x86 == 0) {
+		instructions_done++;
+		last_instruction_cycles = p8088->cycles;
+	}
+	/* processor is in a wait state
+		- no instruction done
+		- 1 clock cycle passes (200 ns for 5 MHz clock) */
+	else {
+		last_instruction_cycles = 1;
+	}
+	/* increment cycles_done to add the number of cycles the current
+	instruction took */
+	// cycles_done = cycles_done + p8088->cycles;
+	// only print processor status if debug conditions are met
+	if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+		(debug_mode_2_active == 1)) {
+		printf("IP = %X, opcode = %X, inst = %s\n",
+			p8088->IP,p8088->opcode,p8088->name_opcode);
+		printf("value1 = %X, value2 = %X, result = %X cycles = %d\n",
+			p8088->operand1,p8088->operand2,p8088->op_result,p8088->cycles);
+		printf("AL = %X, AH = %X, BL = %X, BH = %X, CL = %X, CH = %X, DL = %X, DH = %X\n"
+			"SP = %X, BP = %X, DI = %X, SI = %X\n"
+			"CS = %X, SS = %X, DS = %X, ES = %X\n",
+			p8088->AL, p8088->AH,p8088->BL,p8088->BH,p8088->CL,p8088->CH,p8088->DL,
+			p8088->DH,p8088->SP,p8088->BP,p8088->DI,p8088->SI,p8088->CS,p8088->SS,
+			p8088->DS,p8088->ES);
+		printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
+			p8088->c,p8088->p,p8088->ac,p8088->z,p8088->s);
+		printf("trap = %X, int = %X, dir = %X, overflow = %X\n",
+			p8088->t,p8088->i,p8088->d,p8088->o);
+	}
+}
+
+void simulateVSYNCInterrupt() {
+	if(instructions_done%10000 == 10000-2) {
+		// printf("%s\n", "*** KEYINT or DSPYINT/VSYNC interrupt occurred - I6 from Master PIC ***");
+		// set the irq6 pin on the master 8259 int controller to high
+		e8259_set_irq6(e8259_master, 1);
+	}
+	else if(instructions_done%10000 == 10000-1) {
+		// set the irq6 pin to low
+		e8259_set_irq6(e8259_master, 0);
+	}
+}
+
+void handle8253TimerClockCycle() {
+	// update timer cycle count
+	e8253_timer_cycle_count += last_instruction_cycles;
+	// printf("%s%d\n", "last_instruction_cycles: ", last_instruction_cycles);
+	// printf("%s%d\n", "e8253_timer_cycle_count: ", e8253_timer_cycle_count);
+	if(e8253_timer_cycle_count >= E8253_TIMER_CYCLE_LIMIT) {
+		// this will account for any additional cycles not used for this clock cycle
+		e8253_timer_overage = e8253_timer_cycle_count - E8253_TIMER_CYCLE_LIMIT;
+		// printf("%s%d\n", "e8253_timer_overage: ", e8253_timer_overage);
+		e8253_clock(e8253, 1);
+		e8253_timer_cycle_count = e8253_timer_overage;
+	}
+}
+
+void updateZ100Screen() {
+	if(instructions_done%100000 == 0) {
+		/* update pixel array using current VRAM state using renderScreen()
+			function from video.c */
+		renderScreen(video, pixels);
+		// draw pixels to the GTK window using display() function from screen.c
+		display();
+	}
+}
+
+void handleDebugOutput() {
+	if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+		(debug_mode_2_active == 1)) {
+		// printf("\n");
+		printf("instructions done: %ld\n", instructions_done);
+		printf("%s%f\n", "last instruction time (us): ", last_instruction_time_us);
+		printf("TOTAL TIME ELAPSED (us): %f\n", total_time_elapsed);
+		printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
+			jwd1797->rotational_byte_pointer);
+		printf("%s%02X\n", "Current Byte: ", getFDiskByte(jwd1797));
+		printf("%s%f\n", "HEAD LOAD Timer: ", jwd1797->HLT_timer);
+		printf("%s%f\n", "E Delay Timer: ", jwd1797->e_delay_timer);
+		printf("%s", "FD-1797 Status Reg.: " );
+		print_bin8_representation(jwd1797->statusRegister);
+		printf("%s", "Disk ID Field Data: " );
+		printByteArray(jwd1797->id_field_data, 6);
+		// fD1797DebugOutput();
+		getchar();
+	}
+}
+
+void fD1797DebugOutput() {
+	// DEBUG FD-1797 Floppy Disk Controller
+	printf("\nJWD1797 DEBUG OUTPUT: \n");
+}
+
+
+// ============================================================================
+														/* MAIN FUNCTIONS (ENTRY) */
+// ============================================================================
 
 // emulator thread function
 void* mainBoardThread(void* arg) {
@@ -1022,6 +1037,13 @@ void* mainBoardThread(void* arg) {
 
 // MAIN FUNCTION - ENTRY
 int main(int argc, char* argv[]) {
+
+	printf("\n\n%s\n\n",
+		" ===================================\n"
+		" |\tZENITH Z-100 EMULATOR\t   |\n"
+		" |\tby: Joe Matta\t\t   |\n"
+		" |\t8/2020 - 4/2021\t\t   |\n"
+		" ===================================");
 
   char user_input_string[100];
   char valid_enter_key_press;
@@ -1048,10 +1070,10 @@ int main(int argc, char* argv[]) {
   switch(user_input_string[0]) {
     case '1' :
       debug_mode = '0';
-      printf("%s\n", "\nNORMAL MODE");
+      printf("%s\n\n", "\nNORMAL MODE");
       break;
     case '2' :
-      printf("%s\n", "\nDEBUG MODE");
+      printf("%s\n\n", "\nDEBUG MODE");
 			while(1) {
 				// check that the first character in the user's entry is '1' or '2'
 		    // also check that only one character was entered followed by a '\n'
@@ -1133,21 +1155,4 @@ int main(int argc, char* argv[]) {
   pthread_create(&emulator_thread, NULL, mainBoardThread, NULL);
   // start GTK window thread
   screenLoop();
-}
-
-int pr8085_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
-	// if 8085 "in" instruction and reading from WD1797 data register (port 0xB3)
-	if((opCode == 0xdb) && (port_num == 0xb3)) {
-		return 1;
-	}
-	return 0;
-}
-
-int pr8088_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
-	// if 8088 "in" instruction and reading from WD1797 data register (port 0xB3)
-	if(((opCode == 0xe4) || (opCode == 0xe5) || (opCode == 0xec) || (opCode == 0xed))
-		&& (port_num == 0xb3)) {
-		return 1;
-		}
-	return 0;
 }

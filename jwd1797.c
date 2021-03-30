@@ -3,6 +3,8 @@
 // email: jmatta1980@hotmail.com
 // November 2020
 
+// jwd1797.c
+
 // Notes:
 /* clock is assumed to be 1 MHz for single and double density mini-floppy disks
 	(5.25" ) */
@@ -10,23 +12,19 @@
 	512 bytes per sector */
 // A 300 RPM motor speed is also assumed
 // NO write protect functionality
-
-// jwd1797.c
-
+// the wd1797 has a 1MHz clock in the Z100 for 5.25" floppy
 
 #include <stdlib.h>
 #include <stdio.h>
 #include "jwd1797.h"
 #include "utility_functions.h"
 
-// ** ALL TIMINGS in microseconds **
+/* TIMINGS (microseconds) */
 // an index hole is encountered every 0.2 seconds with a 300 RPM drive
 // #define INDEX_HOLE_ENCOUNTER_US 200000
 // index hole pulses should last for a minimum of 20 microseconds (WD1797 docs)
 // (was set to 40 us)
 #define INDEX_HOLE_PULSE_US 1000.0
-// when non-busy status and HLD high, reset HLD after 15 index pulses
-#define HLD_IDLE_INDEX_COUNT_LIMIT 15
 // head load timing (this can be set from 30-100 ms, depending on drive)
 // set to 45 ms (45,000 us)
 #define HEAD_LOAD_TIMING_LIMIT 100
@@ -40,6 +38,10 @@
 // #define ASSEMBLE_DATA_BYTE_LIMIT 26.67	// ~ 3.33375 us/bit
 // (was set to 30.1 us) - ** should be 31.27 us **
 #define ROTATIONAL_BYTE_READ_LIMIT 2	// ~ 3.9 us/bit
+
+/* COUNTS */
+// when non-busy status and HLD high, reset HLD after 15 index pulses
+#define HLD_IDLE_INDEX_COUNT_LIMIT 15
 /* number of bytes after ID field search encounters four 0x00 bytes. This
  	should be 16 bytes according to WD-1797 docs. After 16 bytes the search
 	for the next ID field starts over. */
@@ -89,6 +91,10 @@
 #define GAP4B_LENGTH 598
 #define GAP4B_BYTE 0x4E
 
+/* INTRQ (pin connected to slave PIC IRQ3 in the Z100) is set to high at the
+  completion of every command and when a force interrupt condition is met. It is
+  reset (set to low) when the status register is read or when the commandRegister
+  is loaded with a new command */
 // extern e8259_t* e8259_slave;
 
 char* disk_content_array;
@@ -97,13 +103,6 @@ JWD1797* newJWD1797() {
 	JWD1797* jwd_controller = (JWD1797*)malloc(sizeof(JWD1797));
 	return jwd_controller;
 }
-
-/* INTRQ (pin connected to slave PIC IRQ3 in the Z100) is set to high at the
-  completion of every command and when a force interrupt condition is met. It is
-  reset (set to low) when the status register is read or when the commandRegister
-  is loaded with a new command */
-
-// the wd1797 has a 1MHz clock in the Z100 for 5.25" floppy
 
 void resetJWD1797(JWD1797* jwd_controller) {
 	jwd_controller->dataShiftRegister = 0b00000000;
@@ -1429,10 +1428,10 @@ char* diskImageToCharArray(char* fileName, JWD1797* w) {
 		("result" variable makes sure all expected bytes are copied) */
 	check_result = fread(diskFileArray, 1, w->disk_img_file_size, disk_img);
 	if(check_result != w->disk_img_file_size) {
-		printf("%s\n\n", "ERROR Converting disk image");
+		printf("%s\n", "ERROR Converting disk image");
 	}
 	else {
-		printf("%s\n\n", "disk image file converted to char array successfully!");
+		printf("\n%s\n", "disk image file converted to char array successfully!");
 	}
 	fclose(disk_img);
 	return diskFileArray;
