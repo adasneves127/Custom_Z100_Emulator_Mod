@@ -75,7 +75,8 @@ double step_timer;
 double verify_head_settling_timer;
 double e_delay_timer;
 double assemble_data_byte_timer;
-double rotational_byte_read_timer;
+unsigned int rotational_byte_read_timer;
+unsigned int rotational_byte_read_timer_OVR;
 double HLD_idle_reset_timer;
 double HLT_timer;
 

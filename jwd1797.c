@@ -37,7 +37,7 @@
 	where the 5.25" DS/DD disk is reported to have a 300 kbps data rate. */
 // #define ASSEMBLE_DATA_BYTE_LIMIT 26.67	// ~ 3.33375 us/bit
 // (was set to 30.1 us) - ** should be 31.27 us **
-#define ROTATIONAL_BYTE_READ_LIMIT 2	// ~ 3.9 us/bit
+#define ROTATIONAL_BYTE_READ_LIMIT 31200	// NANOSECONDS
 
 /* COUNTS */
 // when non-busy status and HLD high, reset HLD after 15 index pulses
@@ -158,7 +158,8 @@ void resetJWD1797(JWD1797* jwd_controller) {
 	jwd_controller->verify_head_settling_timer = 0.0;
 	jwd_controller->e_delay_timer = 0.0;
 	jwd_controller->assemble_data_byte_timer = 0.0;
-	jwd_controller->rotational_byte_read_timer = 0.0;
+	jwd_controller->rotational_byte_read_timer = 0; // NANOSECONDS
+	jwd_controller->rotational_byte_read_timer_OVR = 0;
 	jwd_controller->HLD_idle_reset_timer = 0.0;
 	jwd_controller->HLT_timer = 0.0;
 
@@ -411,10 +412,13 @@ void doJWD1797Cycle(JWD1797* w, double us) {
 
 	// reset new byte signal every WD1797 clock cycle
 	w->new_byte_read_signal_ = 0;
-	// clock the rotational byte timer
-	w->rotational_byte_read_timer += us;
+	// clock the rotational byte timer using NANOSECONDS from mainBoard
+	w->rotational_byte_read_timer += ((int)(us*1000.0));
 	// is it time to advance to the next rotational byte?
 	if(w->rotational_byte_read_timer >= ROTATIONAL_BYTE_READ_LIMIT) {
+		// calculate overage for incoming time from mainBoard.c
+		w->rotational_byte_read_timer_OVR =
+			w->rotational_byte_read_timer - ROTATIONAL_BYTE_READ_LIMIT;
 		// advance to next rotational byte (go to 0 if back to start of track)
 		w->rotational_byte_pointer =
 			(w->rotational_byte_pointer + 1) % w->actual_num_track_bytes;
@@ -433,8 +437,8 @@ void doJWD1797Cycle(JWD1797* w, double us) {
 		/* make new byte read signal (internal) go high. This signals that a new
 			rotational byte has been encountered */
 		w->new_byte_read_signal_ = 1;
-		// reset timer
-		w->rotational_byte_read_timer = 0.0;
+		// reset timer to include overage
+		w->rotational_byte_read_timer = w->rotational_byte_read_timer_OVR;
 	}
 
 	/* is it the start of a new track (rising edge of IP? = track_start_signal_)

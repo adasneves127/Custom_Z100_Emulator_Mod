@@ -1006,6 +1006,10 @@ void handleDebugOutput() {
 		printf("TOTAL TIME ELAPSED (us): %f\n", total_time_elapsed);
 		printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
 			jwd1797->rotational_byte_pointer);
+		printf("%s%d\n", "JWD1797 ROTATIONAL BYTE TIMER (ns): ",
+			jwd1797->rotational_byte_read_timer);
+		printf("%s%d\n", "JWD1797 ROTATIONAL BYTE TIMER OVR (ns): ",
+			jwd1797->rotational_byte_read_timer_OVR);
 		printf("%s%02X\n", "Current Byte: ", getFDiskByte(jwd1797));
 		printf("%s%f\n", "HEAD LOAD Timer: ", jwd1797->HLT_timer);
 		printf("%s%f\n", "E Delay Timer: ", jwd1797->e_delay_timer);
