@@ -538,9 +538,11 @@ void e8253_clock (e8253_t *pit, unsigned n)
 		cnt_dec_val (&pit->counter[0], n);
 	}
 
-	if (pit->counter[1].counting) {
-		cnt_dec_val (&pit->counter[1], n);
-	}
+	/* do not clock channel 1 with the other channels
+	 Z-100 clocks channel 1 on channel 0 out */
+	// if (pit->counter[1].counting) {
+	// 	cnt_dec_val (&pit->counter[1], n);
+	// }
 
 	if (pit->counter[2].counting) {
 		cnt_dec_val (&pit->counter[2], n);
@@ -550,6 +552,16 @@ void e8253_clock (e8253_t *pit, unsigned n)
 		pit->timerZero=1;
 	if(pit->counter[2].counting && pit->counter[2].val==0)
 		pit->timerTwo=1;
+}
+
+// used to cascade clock channel 1 from channel 0 out in Z-100
+void e8253_cascade_clock_ch1 (e8253_t *pit, unsigned n)
+{
+	// printf("%s\n", "8253 channel 1 clock function called..");
+	if (pit->counter[1].counting) {
+		cnt_dec_val (&pit->counter[1], n);
+		// printf("%s%x%x\n", "channel 1 counter: ", pit->counter[1].cr[0], pit->counter[1].cr[1]);
+	}
 }
 
 unsigned char e8253_get_status (e8253_t *pit)

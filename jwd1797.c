@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "jwd1797.h"
+#include "e8259.h"
 #include "utility_functions.h"
 
 /* TIMINGS (microseconds) */
@@ -24,14 +25,14 @@
 // #define INDEX_HOLE_ENCOUNTER_US 200000
 // index hole pulses should last for a minimum of 20 microseconds (WD1797 docs)
 // (was set to 40 us)
-#define INDEX_HOLE_PULSE_US 1000.0
+#define INDEX_HOLE_PULSE_US 100.0
 // head load timing (this can be set from 30-100 ms, depending on drive)
 // set to 45 ms (45,000 us)
-#define HEAD_LOAD_TIMING_LIMIT 100
+#define HEAD_LOAD_TIMING_LIMIT 45.0*1000
 // verify time is 30 milliseconds for a 1MHz clock
 #define VERIFY_HEAD_SETTLING_LIMIT 30.0*1000
 // E (15 ms delay) for TYPE II and III commands (30 ms (30*1000 us) for 1 MHz clock)
-#define E_DELAY_LIMIT 100
+#define E_DELAY_LIMIT 30.0*1000
 /* time limit for data shift register to assemble byte in data register
 	(simulated). This value is based on 'https://www.hp9845.net/9845/projects/fdio/#hp_formats'
 	where the 5.25" DS/DD disk is reported to have a 300 kbps data rate. */
@@ -95,7 +96,7 @@
   completion of every command and when a force interrupt condition is met. It is
   reset (set to low) when the status register is read or when the commandRegister
   is loaded with a new command */
-// extern e8259_t* e8259_slave;
+extern e8259_t* e8259_slave;
 
 char* disk_content_array;
 
@@ -113,6 +114,7 @@ void resetJWD1797(JWD1797* jwd_controller) {
 	jwd_controller->statusRegister = 0b00000000;
 	jwd_controller->CRCRegister = 0b00000000;
 	jwd_controller->controlLatch = 0b00000000;
+	jwd_controller->controlStatus = 0b00000000;
 
 	jwd_controller->disk_img_index_pointer = 0;
 	jwd_controller->rotational_byte_pointer = 6000;	// start at a few bytes before 0 index
@@ -276,7 +278,8 @@ unsigned int readJWD1797(JWD1797* jwd_controller, unsigned int port_addr) {
 			break;
 		// controller status port (read)
 		case 0xb5:
-			printf("reading from WD1797 control status port.. ** NOT IMPLEMENTED **\n");
+			printf("reading from WD1797 control status port 0xB5\n");
+			r_val = jwd_controller->controlStatus;
 			break;
 		default:
 			printf("%X is an invalid port!\n", port_addr);
@@ -396,7 +399,7 @@ void doJWD1797Cycle(JWD1797* w, double us) {
 			w->statusRegister &= 0b11111110;
 			// generate interrupt
 			w->intrq = 1;
-			// e8259_set_irq0 (e8259_slave, 1);
+			e8259_set_irq0 (e8259_slave, 1);
 		}
 		else {	// NO command running
 			/* reset busy status and clear SEEK ERROR and CRC ERROR bits
@@ -406,7 +409,7 @@ void doJWD1797Cycle(JWD1797* w, double us) {
 			w->currentCommandType = 1;
 			// generate interrupt
 			w->intrq = 1;
-			// e8259_set_irq0 (e8259_slave, 1);
+			e8259_set_irq0 (e8259_slave, 1);
 		}
 	}
 
@@ -453,7 +456,7 @@ void doJWD1797Cycle(JWD1797* w, double us) {
 			w->statusRegister &= 0b11111110;
 			// generate interrupt
 			w->intrq = 1;
-			// e8259_set_irq0 (e8259_slave, 1);
+			e8259_set_irq0 (e8259_slave, 1);
 		}
 		else {	// NO command running
 			/* reset busy status and clear SEEK ERROR and CRC ERROR bits
@@ -463,7 +466,7 @@ void doJWD1797Cycle(JWD1797* w, double us) {
 			w->currentCommandType = 1;
 			// generate interrupt
 			w->intrq = 1;
-			// e8259_set_irq0 (e8259_slave, 1);
+			e8259_set_irq0 (e8259_slave, 1);
 		}
 	}
 
@@ -497,6 +500,9 @@ void doJWD1797Cycle(JWD1797* w, double us) {
 	}
 	// HLD pin will reset if drive is not busy and 15 index pulses happen
 	handleHLDIdle(w);
+
+	/* update control status */
+	updateControlStatus(w);
 }
 
 /* WD1797 accepts 11 different commands - this function will register the
@@ -733,7 +739,8 @@ void commandStep(JWD1797* w, double us) {
 				// w->HLD_idle_reset_timer = 0.0;
 				// generate interrupt
 				w->intrq = 1;
-				// e8259_set_irq0 (e8259_slave, 1);
+				e8259_set_irq0 (e8259_slave, 1);
+				printf("%s\n", "command type I complete");
 				return;
 			}
 
@@ -810,7 +817,7 @@ void commandStep(JWD1797* w, double us) {
 					// w->HLD_idle_reset_timer = 0.0;
 					// assume verification operation is successful - generate interrupt
 					w->intrq = 1;
-					// e8259_set_irq0 (e8259_slave, 1);
+					e8259_set_irq0 (e8259_slave, 1);
 					return;
 				}
 				// if sector number not out of bounds, find next sector
@@ -838,7 +845,7 @@ void commandStep(JWD1797* w, double us) {
 			// w->HLD_idle_reset_timer = 0.0;
 			// assume verification operation is successful - generate interrupt
 			w->intrq = 1;
-			// e8259_set_irq0 (e8259_slave, 1);
+			e8259_set_irq0 (e8259_slave, 1);
 			return;
 		} // END READ SECTOR
 
@@ -914,7 +921,7 @@ void commandStep(JWD1797* w, double us) {
 				// w->HLD_idle_reset_timer = 0.0;
 				// assume verification operation is successful - generate interrupt
 				w->intrq = 1;
-				// e8259_set_irq0 (e8259_slave, 1);
+				e8259_set_irq0 (e8259_slave, 1);
 				// reset HLD idle timer
 				return;
 			}
@@ -940,7 +947,7 @@ void commandStep(JWD1797* w, double us) {
 					// w->HLD_idle_reset_timer = 0.0;
 					// assume verification operation is successful - generate interrupt
 					w->intrq = 1;
-					// e8259_set_irq0 (e8259_slave, 1);
+					e8259_set_irq0 (e8259_slave, 1);
 					// reset HLD idle timer
 					return;
 				}
@@ -1058,8 +1065,8 @@ void setupTypeIICommand(JWD1797* w) {
 	// reset drq/lost data/record not found/bits 5, 6 in status register
 	w->statusRegister &= 0b10001001;
 	// reset INT request line
-	// w->intrq = 0;
-	// e8259_set_irq0 (e8259_slave, 0);
+	w->intrq = 0;
+	e8259_set_irq0 (e8259_slave, 0);
 
 	// sample READY input from DRIVE
 	if(!w->ready_pin) {
@@ -1068,7 +1075,7 @@ void setupTypeIICommand(JWD1797* w) {
 		w->statusRegister &= 0b11111110;	// reset (clear) busy status bit
 		// ** generate interrupt **
 		w->intrq = 1; // MUST SEND INTERRUPT to slave int controller also...
-		// e8259_set_irq0 (e8259_slave, 1);
+		e8259_set_irq0 (e8259_slave, 1);
 		return; // do not execute command
 	}
 
@@ -1113,7 +1120,7 @@ void setupTypeIIICommand(JWD1797* w) {
 		w->statusRegister &= 0b11111110;	// reset (clear) busy status bit
 		// ** generate interrupt **
 		w->intrq = 1; // MUST SEND INTERRUPT to slave int controller also...
-		// e8259_set_irq0 (e8259_slave, 1);
+		e8259_set_irq0 (e8259_slave, 1);
 		return; // do not execute command
 	}
 
@@ -1404,6 +1411,33 @@ void handleHLTTimer(JWD1797* w, double time) {
 	}
 }
 
+void updateControlStatus(JWD1797* w) {
+	// get busy status from status register
+	unsigned char busy_stat = (w->statusRegister & 0b00000001);
+	// set busy bit 0 based on status register bit 0
+	w->controlStatus = w->controlStatus | busy_stat;
+	// get ready status (always ready)
+	unsigned char ready_stat = (w->ready_pin << 7) & 0b10000000;
+	// set ready status bit 7
+	w->controlStatus = w->controlStatus | ready_stat;
+	// make write protect always off - bit 6
+	w->controlStatus = w->controlStatus & 0b10111111;
+	// get HLT_pin status for headload stat
+	unsigned char head_load_stat = (w->HLT_pin << 5) & 0b00100000;
+	// set ready status bit 5
+	w->controlStatus = w->controlStatus | head_load_stat;
+	// set SEEK and CRC error to always 0 (never error status) - bits 3 and 4
+	w->controlStatus = w->controlStatus & 0b11100111;
+	// get track zero status from not track zero pin
+	unsigned char track_zero_status = (~(w->not_track00_pin << 2)) & 0b00000100;
+	// set track zero status
+	w->controlStatus = w->controlStatus | track_zero_status;
+	// get index pulse pin status
+	unsigned char index_pulse = (w->index_pulse_pin << 1) & 0b00000010;
+	// set index pulse status
+	w->controlStatus = w->controlStatus | index_pulse;
+}
+
 // http://www.cplusplus.com/reference/cstdio/fread/
 char* diskImageToCharArray(char* fileName, JWD1797* w) {
 	FILE* disk_img;
@@ -1658,7 +1692,7 @@ int verifyIndexTimeout(JWD1797* w, int x) {
 		// w->HLD_idle_reset_timer = 0.0;
 		// assume verification operation is successful - generate interrupt
 		w->intrq = 1;
-		// e8259_set_irq0 (e8259_slave, 1);
+		e8259_set_irq0 (e8259_slave, 1);
 		// reset HLD idle timer
 		return 1;
 	}
@@ -1798,7 +1832,7 @@ int verifyCRC(JWD1797* w) {
 		// w->HLD_idle_reset_timer = 0.0;
 		// assume verification operation is successful - generate interrupt
 		w->intrq = 1;
-		// e8259_set_irq0 (e8259_slave, 1);
+		e8259_set_irq0 (e8259_slave, 1);
 		// reset HLD idle timer
 		return 1;
 	}
@@ -1972,7 +2006,7 @@ int dataAddressMarkSearch(JWD1797* w) {
 					w->statusRegister |= 0b00010000;	// set record-not found bit
 					// ** generate interrupt **
 					w->intrq = 1; // MUST SEND INTERRUPT to slave int controller also...
-					// e8259_set_irq0 (e8259_slave, 1);
+					e8259_set_irq0 (e8259_slave, 1);
 					return 0;
 			}
 			return 0;
@@ -1996,7 +2030,7 @@ int dataAddressMarkSearch(JWD1797* w) {
 				w->statusRegister |= 0b00010000;	// set record-not found bit
 				// ** generate interrupt **
 				w->intrq = 1; // MUST SEND INTERRUPT to slave int controller also...
-				// e8259_set_irq0 (e8259_slave, 1);
+				e8259_set_irq0 (e8259_slave, 1);
 				return 0;
 		}
 		return 0;

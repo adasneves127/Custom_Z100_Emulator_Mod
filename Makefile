@@ -10,7 +10,7 @@ e8259.o : e8259.c e8259.h
 	gcc -c e8259.c
 e8253.o : e8253.c e8253.h
 	gcc -c e8253.c
-jwd1797.o : jwd1797.c jwd1797.h
+jwd1797.o : jwd1797.c jwd1797.h e8259.h
 	gcc -c jwd1797.c
 keyboard.o : keyboard.c keyboard.h
 	gcc -c keyboard.c

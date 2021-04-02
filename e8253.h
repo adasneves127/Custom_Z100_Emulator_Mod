@@ -50,7 +50,7 @@ typedef struct {
 	unsigned char   gate;
 
 	void            *out_ext;
-	void            (*out) (void *ext, unsigned char val);
+	void            (*out)(void *ext, unsigned char val);
 	unsigned char   out_val;
 
 	unsigned short val;
@@ -136,5 +136,7 @@ void e8253_clock (e8253_t *pit, unsigned n);
 //my addition
 unsigned char e8253_get_status (e8253_t *pit);
 void e8253_set_status (e8253_t *pit, unsigned char val);
+
+void e8253_cascade_clock_ch1 (e8253_t *pit, unsigned n);
 
 #endif

@@ -23,6 +23,7 @@ unsigned char commandRegister; // do not load when device is busy - except force
 unsigned char statusRegister;
 unsigned char CRCRegister;
 unsigned char controlLatch;
+unsigned char controlStatus;
 
 // keep track of current byte being pointed to by the READ/WRITE head
 unsigned long disk_img_index_pointer;
@@ -194,3 +195,4 @@ int getSectorLengthFromID(JWD1797*);
 int handleEDelay(JWD1797*, double);
 int dataAddressMarkSearch(JWD1797*);
 int verifyCRC(JWD1797*);
+void updateControlStatus(JWD1797*);

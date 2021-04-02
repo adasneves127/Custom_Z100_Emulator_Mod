@@ -167,17 +167,18 @@ int z100_main() {
 
   // make a timer object
   e8253 = e8253_new();
-  e8253_init(e8253);
   e8253_set_gate(e8253, 0, 1);
   e8253_set_gate(e8253, 1, 1);
   e8253_set_gate(e8253, 2, 1);
-	// set OUT 0 and OUT 2 functions to triggar IRQ2 on the master PIC
-  e8253_set_out_fct(e8253, 0, e8259_master, e8259_set_irq2);
-  e8253_set_out_fct(e8253, 2, e8259_master, e8259_set_irq2);
-  e8253_set_out_fct(e8253, 1, timer_ext_1, timer_out_1);
+	/* set OUT 0 and OUT 2 functions to triggar IRQ2 on the master PIC
+	 OUT 0 also clocks timer channel 1 in the Z-100 */
+  e8253_set_out_fct(e8253, 0, NULL, timer_out_0);
+	e8253_set_out_fct(e8253, 1, NULL, timer_out_1);
+  e8253_set_out_fct(e8253, 2, NULL, timer_out_2);
 
   // set up floppy controller object
   jwd1797 = newJWD1797();
+	// load current disk file (hardcoded) here in reset function
   resetJWD1797(jwd1797);
 
   /* this creates a thread running from the debug window function */
@@ -278,9 +279,28 @@ void cascadeInterruptFunctionCall(void* v, int number) {
   if(number == 0) {
     return;
   }
-	// printf("SLAVE 8259 PIC INT SIGNAL to MASTER 8259 PIC IRQ3\n");
+	printf("SLAVE 8259 PIC INT SIGNAL to MASTER 8259 PIC IRQ3\n");
   e8259_set_irq3(e8259_master, 1);
 }
+
+/* since the Z-100 timer circuitry clocks the 8253 chnnel 1 timer with the
+ output of the channel 0 timer, this function clocks timer channel 1 when
+ channel 0's out goes high (Z-100 Technical Manual (Hardware) - Page 10.8) */
+void timer_out_0(void* v, int number) {
+	// printf("timer out 0\n");
+	e8259_set_irq2(e8259_master, 1);
+	e8253_cascade_clock_ch1(e8253, 1);
+}
+// void timer_ext_0() {printf("timer ext 0\n");}
+void timer_out_1(void* v, int number) {
+	printf("timer out 1\n");
+}
+// void timer_ext_1() {printf("timer ext 1\n");}
+void timer_out_2(void* v, int number) {
+	printf("timer out 2\n");
+	e8259_set_irq2(e8259_master, 1);
+}
+// void timer_ext_2() {printf("timer ext 2\n");}
 
 int getParity(unsigned int data) {
 	return ((data&1)!=0) ^ ((data&2)!=0) ^ ((data&4)!=0) ^ ((data&8)!=0) ^
@@ -421,37 +441,37 @@ unsigned int z100_port_read(unsigned int address) {
     case 0xB0:
       // Z-207 Primary Floppy Drive Controller Status Port
       // printf("reading from Z-207 Primary Floppy Drive Controller Status Port %X\n",
-      //  address);
+      // address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB1:
       // Z-207 Primary Floppy Drive Controller Track Port
-      // printf("reading from Z-207 Primary Floppy Drive Controller Track Port %X\n",
-      //  address);
+      printf("reading from Z-207 Primary Floppy Drive Controller Track Port %X\n",
+       address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB2:
       // Z-207 Primary Floppy Drive Controller Sector Port
-      // printf("reading from Z-207 Primary Floppy Drive Controller Sector Port %X\n",
-      //   address);
+      printf("reading from Z-207 Primary Floppy Drive Controller Sector Port %X\n",
+        address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB3:
       // Z-207 Primary Floppy Drive Controller Data Port
       // printf("reading from Z-207 Primary Floppy Drive Controller Data Port %X\n",
-      //   address);
+      //  address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB4:
       // Z-207 Primary Floppy Drive Controller CNTRL Control Port
-      // printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
-      //   address);
+      printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
+        address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB5:
       // Z-207 Primary Floppy Drive Controller CNTRL Status Port
-      // printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
-      //   address);
+      printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
+        address);
       return_value = readJWD1797(jwd1797, address);
       break;
     // Video Commands - 68A21 parallel port
@@ -860,14 +880,6 @@ void initialize_z100_ports() {
   io_diag_port_F6 = 0b11111111;
 }
 
-// the timer functions below serve as stand-in functions
-void timer_out_0() {printf("timer out 0\n");}
-void timer_ext_0() {printf("timer ext 0\n");}
-void timer_out_1() {printf("timer out 1\n");}
-void timer_ext_1() {printf("timer ext 1\n");}
-void timer_out_2() {printf("timer out 2\n");}
-void timer_ext_2() {printf("timer ext 2\n");}
-
 int pr8085_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
 	// if 8085 "in" instruction and reading from WD1797 data register (port 0xB3)
 	if((opCode == 0xdb) && (port_num == 0xb3)) {
@@ -1017,14 +1029,30 @@ void handleDebugOutput() {
 		print_bin8_representation(jwd1797->statusRegister);
 		printf("%s", "Disk ID Field Data: " );
 		printByteArray(jwd1797->id_field_data, 6);
-		// fD1797DebugOutput();
+		fD1797DebugOutput();
 		getchar();
 	}
 }
 
 void fD1797DebugOutput() {
 	// DEBUG FD-1797 Floppy Disk Controller
-	printf("\nJWD1797 DEBUG OUTPUT: \n");
+	printf("%s", "data a1 byte count: ");
+  printf("%d\n", jwd1797->data_a1_byte_counter);
+  printf("%s", "data AM search count: ");
+  printf("%d\n", jwd1797->data_mark_search_count);
+  printf("%s", "Data AM found: ");
+  printf("%d\n", jwd1797->data_mark_found);
+  printf("%s", "Sector length count: ");
+  printf("%d\n", jwd1797->intSectorLength);
+
+  printf("%s%d\n", "DRQ: ", jwd1797->drq);
+  printf("%s%02X\n", "DATA REGISTER: ", jwd1797->dataRegister);
+  printf("%s", "SECTOR REGISTER: ");
+  print_bin8_representation(jwd1797->sectorRegister);
+  printf("%s\n", "");
+  printf("%s", "TYPE II STATUS REGISTER: ");
+  print_bin8_representation(jwd1797->statusRegister);
+  printf("%s\n", "");
 }
 
 
