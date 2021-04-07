@@ -1471,17 +1471,15 @@ char* diskImageToCharArray(char* fileName, JWD1797* w) {
 
 /* establishes a char array (w->formattedDiskArray) that contains the (IBM)
 	format bytes and the disk .img data bytes. The returned array will approximate
-	the actual bytes on a 5.25" DS/DD (double side/double density) 360KB floppy
-	disk */
+	the actual bytes on a 5.25" DS/DD (double side/double density) floppy disk */
 void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 	// first, get the payload byte data from the disk image file as an array
 	char* sectorPayloadDataBytes = diskImageToCharArray(fileName, w);
-	/* set disk attributes based on disk image file (40 tracks/9 sectors per track/
-		512 bytes per sector for 360k z-dos disk)
-		/* **** THIS IS HARDCODED for A Z-DOS DISK.
-			THIS SHOULD BE DYNAMIC! THIS can be dynamic by reading format
-			bytes from disk header information at appropriate array index ***
-			How do we extract these values form the disk data? *** */
+	/* set disk attributes based on disk image file (For exmaple,
+		40 tracks/9 sectors per track/512 bytes per sector for 360k z-dos disk)
+	/* **** THIS IS HARDCODED for the "z-dos-1.img" Z-DOS DISK file image (360k).
+		THIS SHOULD BE DYNAMIC! This can be dynamic by reading format
+		bytes from disk header information at appropriate array index *** */
 	w->cylinders = 40;	// 0-39
 	w->num_heads = 2;	// 0-1
 	w->sectors_per_track = 9;	// 1-9 (sectors start on 1)
