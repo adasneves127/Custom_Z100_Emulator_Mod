@@ -469,10 +469,11 @@ unsigned int z100_port_read(unsigned int address) {
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB5:
-      // Z-207 Primary Floppy Drive Controller CNTRL Status Port
-      printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
-        address);
-      return_value = readJWD1797(jwd1797, address);
+			// Z-207 Primary Floppy Drive Controller CNTRL Status Port
+			return_value = readJWD1797(jwd1797, address);
+      printf("reading %X from Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
+        return_value, address);
+
       break;
     // Video Commands - 68A21 parallel port
     case 0xD8:
@@ -644,32 +645,32 @@ void z100_port_write(unsigned int address, unsigned char data) {
     /* FD179X-02 Floppy Disk Formatter/Controller (0xB0-0xB5) */
     case 0xB0:
       // Z-207 Primary Floppy Drive Controller Command Port
-      // printf("writing %X to Z-207 Primary Floppy Drive Controller Command Port %X\n",
-      //   data, address);
+      printf("writing %X to Z-207 Primary Floppy Drive Controller Command Port %X\n",
+        data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB1:
       // Z-207 Primary Floppy Drive Controller Track Port
-      // printf("writing %X to Z-207 Primary Floppy Drive Controller Track Port %X\n",
-      //   data, address);
+      printf("writing %X to Z-207 Primary Floppy Drive Controller Track Port %X\n",
+        data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB2:
       // Z-207 Primary Floppy Drive Controller Sector Port
-      // printf("writing %X to Z-207 Primary Floppy Drive Controller Sector Port %X\n",
-      //   data, address);
+      printf("writing %X to Z-207 Primary Floppy Drive Controller Sector Port %X\n",
+        data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB3:
       // Z-207 Primary Floppy Drive Controller Data Port
-      // printf("writing %X to Z-207 Primary Floppy Drive Controller Data Port %X\n",
-      //   data, address);
+      printf("writing %X to Z-207 Primary Floppy Drive Controller Data Port %X\n",
+        data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB4:
       // Z-207 Primary Floppy Drive Controller CNTRL Control Port
-      // printf("writing %X to Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
-      //   data, address);
+      printf("writing %X to Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
+        data, address);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB5:

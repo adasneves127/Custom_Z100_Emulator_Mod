@@ -92,7 +92,7 @@
 #define GAP4B_LENGTH 598
 #define GAP4B_BYTE 0x4E
 
-/* INTRQ (pin connected to slave PIC IRQ3 in the Z100) is set to high at the
+/* INTRQ (pin connected to slave PIC IRQ0 in the Z100) is set to high at the
   completion of every command and when a force interrupt condition is met. It is
   reset (set to low) when the status register is read or when the commandRegister
   is loaded with a new command */
@@ -241,8 +241,9 @@ unsigned int readJWD1797(JWD1797* jwd_controller, unsigned int port_addr) {
 		// status reg port
 		case 0xb0:
 			r_val = jwd_controller->statusRegister;
-			// reset INTRQ when status register is read
+			// clear interrupt
 			jwd_controller->intrq = 0;
+			e8259_set_irq0 (e8259_slave, 0);
 			// clear all forced interrupt flags except INTERRUPT IMMEDIATE (0xD8)
 			jwd_controller->interruptNRtoR = 0;
 			jwd_controller->interruptRtoNR = 0;
@@ -296,8 +297,9 @@ void writeJWD1797(JWD1797* jwd_controller, unsigned int port_addr, unsigned int 
 		// command reg port
 		case 0xb0:
 			jwd_controller->commandRegister = value;
-			// reset INTRQ when command register is written to
+			// reset INTRQ when command register is written to - clear interrupt
 			jwd_controller->intrq = 0;
+			e8259_set_irq0 (e8259_slave, 0);
 			// clear all forced interrupt flags except INTERRUPT IMMEDIATE (0xD8)
 			jwd_controller->interruptNRtoR = 0;
 			jwd_controller->interruptRtoNR = 0;
@@ -1417,7 +1419,7 @@ void updateControlStatus(JWD1797* w) {
 	// set busy bit 0 based on status register bit 0
 	w->controlStatus = w->controlStatus | busy_stat;
 	// get ready status (always ready)
-	unsigned char ready_stat = (w->ready_pin << 7) & 0b10000000;
+	unsigned char ready_stat = (~(w->ready_pin << 7)) & 0b10000000;
 	// set ready status bit 7
 	w->controlStatus = w->controlStatus | ready_stat;
 	// make write protect always off - bit 6
