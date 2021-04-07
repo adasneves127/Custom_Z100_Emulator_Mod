@@ -117,7 +117,7 @@ void resetJWD1797(JWD1797* jwd_controller) {
 	jwd_controller->controlStatus = 0b00000000;
 
 	jwd_controller->disk_img_index_pointer = 0;
-	jwd_controller->rotational_byte_pointer = 6000;	// start at a few bytes before 0 index
+	jwd_controller->rotational_byte_pointer = 2500;	// start at a few bytes before 0 index
 	jwd_controller->rw_start_byte = 0;
 
 	// jwd_controller->ready = 0;	// start drive not ready
@@ -1448,24 +1448,15 @@ char* diskImageToCharArray(char* fileName, JWD1797* w) {
 	char* diskFileArray;
   // open current file (disk in drive)
   disk_img = fopen(fileName, "rb");
-	/* set disk attributes based on disk image file (40 tracks/9 sectors per track/
-		512 bytes per sector for 360k z-dos disk)
-		/* **** THIS IS HARDCODED for A Z-DOS DISK.
-			THIS SHOULD BE DYNAMIC! ***
-			How do we extract these values form the disk data? *** */
-	w->cylinders = 40;	// 0-39
-	w->num_heads = 2;	// 0-1
-	w->sectors_per_track = 9;	// 1-9 (sectors start on 1)
-	w->sector_length = 512;	// bytes 0-511
-	/* */
-	// obtain disk size
+
+	// obtain disk image file size in bytes
 	fseek(disk_img, 0, SEEK_END);
 	w->disk_img_file_size = ftell(disk_img);
 	rewind(disk_img);
 	// allocate memory to handle array for entire disk image
 	diskFileArray = (char*) malloc(sizeof(char) * w->disk_img_file_size);
 	/* copy disk image file into array buffer
-		("result" variable makes sure all expected bytes are copied) */
+		("check_result" variable makes sure all expected bytes are copied) */
 	check_result = fread(diskFileArray, 1, w->disk_img_file_size, disk_img);
 	if(check_result != w->disk_img_file_size) {
 		printf("%s\n", "ERROR Converting disk image");
@@ -1474,6 +1465,7 @@ char* diskImageToCharArray(char* fileName, JWD1797* w) {
 		printf("\n%s\n", "disk image file converted to char array successfully!");
 	}
 	fclose(disk_img);
+
 	return diskFileArray;
 }
 
@@ -1484,6 +1476,17 @@ char* diskImageToCharArray(char* fileName, JWD1797* w) {
 void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 	// first, get the payload byte data from the disk image file as an array
 	char* sectorPayloadDataBytes = diskImageToCharArray(fileName, w);
+	/* set disk attributes based on disk image file (40 tracks/9 sectors per track/
+		512 bytes per sector for 360k z-dos disk)
+		/* **** THIS IS HARDCODED for A Z-DOS DISK.
+			THIS SHOULD BE DYNAMIC! THIS can be dynamic by reading format
+			bytes from disk header information at appropriate array index ***
+			How do we extract these values form the disk data? *** */
+	w->cylinders = 40;	// 0-39
+	w->num_heads = 2;	// 0-1
+	w->sectors_per_track = 9;	// 1-9 (sectors start on 1)
+	w->sector_length = 512;	// bytes 0-511
+	/* */
 	/* determine the total number of bytes the raw disk byte array will be */
 	// first get the length of the total data payload bytes extracted from the disk image
 	long num_payload_bytes = w->disk_img_file_size;
@@ -1491,7 +1494,7 @@ void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 		This will be used for rotational byte pointing while the disk is spinning */
 	w->actual_num_track_bytes = GAP4A_LENGTH + SYNC_LENGTH
 		+ INDEX_AM_PREFIX_LENGTH + INDEX_AM_LENGTH + GAP1_LENGTH
-		+ (9 * (SYNC_LENGTH + ID_AM_PREFIX_LENGTH
+		+ (w->sectors_per_track * (SYNC_LENGTH + ID_AM_PREFIX_LENGTH
 		+ ID_AM_LENGTH + CYLINDER_LENGTH + HEAD_LENGTH + SECTOR_LENGTH
 		+ SECTOR_SIZE_LENGTH + CRC_LENGTH + GAP2_LENGTH + SYNC_LENGTH
 		+ DATA_AM_PREFIX_LENGTH + DATA_AM_LENGTH + w->sector_length
