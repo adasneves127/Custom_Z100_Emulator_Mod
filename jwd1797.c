@@ -21,10 +21,7 @@
 #include "utility_functions.h"
 
 /* TIMINGS (microseconds) */
-// an index hole is encountered every 0.2 seconds with a 300 RPM drive
-// #define INDEX_HOLE_ENCOUNTER_US 200000
 // index hole pulses should last for a minimum of 20 microseconds (WD1797 docs)
-// (was set to 40 us)
 #define INDEX_HOLE_PULSE_US 100.0
 // head load timing (this can be set from 30-100 ms, depending on drive)
 // set to 45 ms (45,000 us)
@@ -33,12 +30,6 @@
 #define VERIFY_HEAD_SETTLING_LIMIT 30.0*1000
 // E (15 ms delay) for TYPE II and III commands (30 ms (30*1000 us) for 1 MHz clock)
 #define E_DELAY_LIMIT 30.0*1000
-/* time limit for data shift register to assemble byte in data register
-	(simulated). This value is based on 'https://www.hp9845.net/9845/projects/fdio/#hp_formats'
-	where the 5.25" DS/DD disk is reported to have a 300 kbps data rate. */
-// #define ASSEMBLE_DATA_BYTE_LIMIT 26.67	// ~ 3.33375 us/bit
-// (was set to 30.1 us) - ** should be 31.27 us **
-#define ROTATIONAL_BYTE_READ_LIMIT 31200	// NANOSECONDS
 
 /* COUNTS */
 // when non-busy status and HLD high, reset HLD after 15 index pulses
@@ -160,8 +151,9 @@ void resetJWD1797(JWD1797* jwd_controller) {
 	jwd_controller->verify_head_settling_timer = 0.0;
 	jwd_controller->e_delay_timer = 0.0;
 	jwd_controller->assemble_data_byte_timer = 0.0;
+	jwd_controller->rotational_byte_read_limit = 0; // NANOSECONDS
 	jwd_controller->rotational_byte_read_timer = 0; // NANOSECONDS
-	jwd_controller->rotational_byte_read_timer_OVR = 0;
+	jwd_controller->rotational_byte_read_timer_OVR = 0; // NANOSECONDS
 	jwd_controller->HLD_idle_reset_timer = 0.0;
 	jwd_controller->HLT_timer = 0.0;
 
@@ -420,10 +412,10 @@ void doJWD1797Cycle(JWD1797* w, double us) {
 	// clock the rotational byte timer using NANOSECONDS from mainBoard
 	w->rotational_byte_read_timer += ((int)(us*1000.0));
 	// is it time to advance to the next rotational byte?
-	if(w->rotational_byte_read_timer >= ROTATIONAL_BYTE_READ_LIMIT) {
+	if(w->rotational_byte_read_timer >= w->rotational_byte_read_limit) {
 		// calculate overage for incoming time from mainBoard.c
 		w->rotational_byte_read_timer_OVR =
-			w->rotational_byte_read_timer - ROTATIONAL_BYTE_READ_LIMIT;
+			w->rotational_byte_read_timer - w->rotational_byte_read_limit;
 		// advance to next rotational byte (go to 0 if back to start of track)
 		w->rotational_byte_pointer =
 			(w->rotational_byte_pointer + 1) % w->actual_num_track_bytes;
@@ -1441,11 +1433,11 @@ void updateControlStatus(JWD1797* w) {
 }
 
 // http://www.cplusplus.com/reference/cstdio/fread/
-char* diskImageToCharArray(char* fileName, JWD1797* w) {
+unsigned char* diskImageToCharArray(char* fileName, JWD1797* w) {
 	FILE* disk_img;
-	long diskFileSize;
+	unsigned long diskFileSize;
 	size_t check_result;
-	char* diskFileArray;
+	unsigned char* diskFileArray;
   // open current file (disk in drive)
   disk_img = fopen(fileName, "rb");
 
@@ -1454,7 +1446,7 @@ char* diskImageToCharArray(char* fileName, JWD1797* w) {
 	w->disk_img_file_size = ftell(disk_img);
 	rewind(disk_img);
 	// allocate memory to handle array for entire disk image
-	diskFileArray = (char*) malloc(sizeof(char) * w->disk_img_file_size);
+	diskFileArray = (unsigned char*) malloc(sizeof(char) * w->disk_img_file_size);
 	/* copy disk image file into array buffer
 		("check_result" variable makes sure all expected bytes are copied) */
 	check_result = fread(diskFileArray, 1, w->disk_img_file_size, disk_img);
@@ -1474,16 +1466,24 @@ char* diskImageToCharArray(char* fileName, JWD1797* w) {
 	the actual bytes on a 5.25" DS/DD (double side/double density) floppy disk */
 void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 	// first, get the payload byte data from the disk image file as an array
-	char* sectorPayloadDataBytes = diskImageToCharArray(fileName, w);
+	unsigned char* sectorPayloadDataBytes = diskImageToCharArray(fileName, w);
 	/* set disk attributes based on disk image file (For exmaple,
 		40 tracks/9 sectors per track/512 bytes per sector for 360k z-dos disk)
-	/* **** THIS IS HARDCODED for the "z-dos-1.img" Z-DOS DISK file image (360k).
-		THIS SHOULD BE DYNAMIC! This can be dynamic by reading format
-		bytes from disk header information at appropriate array index *** */
-	w->cylinders = 40;	// 0-39
-	w->num_heads = 2;	// 0-1
-	w->sectors_per_track = 9;	// 1-9 (sectors start on 1)
-	w->sector_length = 512;	// bytes 0-511
+		These are dynamically set according to the loader disk paramenter table.
+		(page 10.18 - Z100 Technical Manual – Hardware) */
+
+	w->num_heads = (sectorPayloadDataBytes[0x15]&1) + 1;	// 0-1
+	printf("%s%d\n", "number of sides (heads): ", w->num_heads);
+	int temp_sectors_per_track = sectorPayloadDataBytes[0xF];	// 1-9 (sectors start on 1)
+	w->sectors_per_track = 8;	// 1-9 (sectors start on 1)
+	printf("%s%d\n", "sectors per track: ", temp_sectors_per_track);
+	w->sector_length = sectorPayloadDataBytes[0x4] | (sectorPayloadDataBytes[0x5]<<8);
+	printf("%s%d\n", "sector length (bytes): ", w->sector_length);
+	int total_sectors = sectorPayloadDataBytes[0xC] | (sectorPayloadDataBytes[0xD]<<8);
+	printf("%s%d\n", "total number of sectors on disk: ", total_sectors);
+	w->cylinders = total_sectors/temp_sectors_per_track/w->num_heads;	// 0-39
+	printf("%s%d\n", "cylinders (tracks per side): ", w->cylinders);
+
 	/* */
 	/* determine the total number of bytes the raw disk byte array will be */
 	// first get the length of the total data payload bytes extracted from the disk image
@@ -1497,8 +1497,14 @@ void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 		+ SECTOR_SIZE_LENGTH + CRC_LENGTH + GAP2_LENGTH + SYNC_LENGTH
 		+ DATA_AM_PREFIX_LENGTH + DATA_AM_LENGTH + w->sector_length
 		+ CRC_LENGTH + GAP3_LENGTH)) + GAP4B_LENGTH;
-
 	printf("%s%d\n", "Formatted bytes per track: ", w->actual_num_track_bytes);
+
+	/* calculate byte rotation time in ns (for a 300 rpm disk, one rotation takes
+		200,000,000 nanoseconds) */
+	unsigned long raw_rotational_byte_read_limit = 200000000/w->actual_num_track_bytes;
+	w->rotational_byte_read_limit = raw_rotational_byte_read_limit -
+		(raw_rotational_byte_read_limit%200);
+	printf("%s%d\n", "rotational byte read limit (ns): ", w->rotational_byte_read_limit);
 
 	// now, get the total amount of bytes for the entire formatted disk
 	long formatted_disk_size = (w->cylinders * 2) * w->actual_num_track_bytes;

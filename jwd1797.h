@@ -76,6 +76,7 @@ double step_timer;
 double verify_head_settling_timer;
 double e_delay_timer;
 double assemble_data_byte_timer;
+unsigned int rotational_byte_read_limit;
 unsigned int rotational_byte_read_timer;
 unsigned int rotational_byte_read_timer_OVR;
 double HLD_idle_reset_timer;
@@ -115,10 +116,10 @@ int not_master_reset; /* if this pin goes low for at least 50us, 0b00000011
 
 int current_track;
 
-int cylinders; // (tracks per side)
-int num_heads; // WD1797 has two read heads, one for each side of the disk
-int sectors_per_track;
-int sector_length;
+unsigned int cylinders; // (tracks per side)
+unsigned int num_heads; // WD1797 has two read heads, one for each side of the disk
+unsigned int sectors_per_track;
+unsigned int sector_length;
 
 long disk_img_file_size;
 
@@ -181,7 +182,7 @@ void updateTG43Signal(JWD1797*);
 void handleIndexPulse(JWD1797*, double);
 void handleHLDIdle(JWD1797*);
 void handleHLTTimer(JWD1797*, double);
-char* diskImageToCharArray(char*, JWD1797*);
+unsigned char* diskImageToCharArray(char*, JWD1797*);
 void assembleFormattedDiskArray(JWD1797*, char*);
 unsigned char getFDiskByte(JWD1797*);
 void handleVerifyHeadSettleDelay(JWD1797*, double);
