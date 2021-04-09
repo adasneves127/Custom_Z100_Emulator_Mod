@@ -123,7 +123,7 @@ unsigned int sector_length;
 
 long disk_img_file_size;
 
-char* formattedDiskArray;
+unsigned char* formattedDiskArray;
 int actual_num_track_bytes;
 
 // emulator internal

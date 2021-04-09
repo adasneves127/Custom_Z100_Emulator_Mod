@@ -1471,23 +1471,17 @@ void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 		40 tracks/9 sectors per track/512 bytes per sector for 360k z-dos disk)
 		These are dynamically set according to the loader disk paramenter table.
 		(page 10.18 - Z100 Technical Manual – Hardware) */
-
 	w->num_heads = (sectorPayloadDataBytes[0x15]&1) + 1;	// 0-1
 	printf("%s%d\n", "number of sides (heads): ", w->num_heads);
-	int temp_sectors_per_track = sectorPayloadDataBytes[0xF];	// 1-9 (sectors start on 1)
-	w->sectors_per_track = 8;	// 1-9 (sectors start on 1)
-	printf("%s%d\n", "sectors per track: ", temp_sectors_per_track);
+	w->sectors_per_track = sectorPayloadDataBytes[0xF];	// 1-9 (sectors start on 1)
+	printf("%s%d\n", "sectors per track: ", w->sectors_per_track);
 	w->sector_length = sectorPayloadDataBytes[0x4] | (sectorPayloadDataBytes[0x5]<<8);
 	printf("%s%d\n", "sector length (bytes): ", w->sector_length);
 	int total_sectors = sectorPayloadDataBytes[0xC] | (sectorPayloadDataBytes[0xD]<<8);
 	printf("%s%d\n", "total number of sectors on disk: ", total_sectors);
-	w->cylinders = total_sectors/temp_sectors_per_track/w->num_heads;	// 0-39
+	w->cylinders = total_sectors/w->sectors_per_track/w->num_heads;	// 0-39
 	printf("%s%d\n", "cylinders (tracks per side): ", w->cylinders);
 
-	/* */
-	/* determine the total number of bytes the raw disk byte array will be */
-	// first get the length of the total data payload bytes extracted from the disk image
-	long num_payload_bytes = w->disk_img_file_size;
 	/* determine how many actual bytes (including format bytes) each track is
 		This will be used for rotational byte pointing while the disk is spinning */
 	w->actual_num_track_bytes = GAP4A_LENGTH + SYNC_LENGTH
@@ -1501,22 +1495,24 @@ void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 
 	/* calculate byte rotation time in ns (for a 300 rpm disk, one rotation takes
 		200,000,000 nanoseconds) */
-	unsigned long raw_rotational_byte_read_limit = 200000000/w->actual_num_track_bytes;
+	unsigned long raw_rotational_byte_read_limit =
+		(unsigned long)(200000000/w->actual_num_track_bytes);
+	/* the raw rotational byte read limit is moded by 200 because the smallest
+		incoming time slice from the main Z-100 processor loop is 0.2 microseconds.
+		This is because one cycle of the 5Mhz clock speed takes 0.2 microseconds. */
 	w->rotational_byte_read_limit = raw_rotational_byte_read_limit -
 		(raw_rotational_byte_read_limit%200);
 	printf("%s%d\n", "rotational byte read limit (ns): ", w->rotational_byte_read_limit);
 
 	// now, get the total amount of bytes for the entire formatted disk
-	long formatted_disk_size = (w->cylinders * 2) * w->actual_num_track_bytes;
+	long formatted_disk_size = (w->cylinders * w->num_heads) * w->actual_num_track_bytes;
 
-	// printf("%lu\n", formatted_disk_size);
-	// printf("%lu\n", formatted_disk_size/80);
-
-	char fDiskArray[formatted_disk_size];
+	unsigned char fDiskArray[formatted_disk_size];
 	w->formattedDiskArray = fDiskArray;
 	long formattedDiskIndexPointer = 0;
 	long sectorPayloadArrayIndexPointer = 0;
-	// start making disk
+
+	/* ** start making formatted disk array ** */
 
 	// for each side (head)
 	for(int h = 0; h < w->num_heads; h++) {
