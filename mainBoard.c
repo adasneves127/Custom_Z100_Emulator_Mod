@@ -110,9 +110,6 @@ void fD1797DebugOutput();
 */
 int z100_main() {
 
-	// turn debug mode 2 off until program counter target has been reached
-	debug_mode_2_active = 0;
-
   /*
 		*** set up all hardware conpoenets on the main board ***
 	*/
@@ -192,25 +189,30 @@ int z100_main() {
 		***** initialize all counts to zero *****
 	*/
   instructions_done = 0;
-  // cycles_done = 0;
-  // VSYNC_cycle_count = 0;
-  e8253_timer_cycle_count = 0;
-	e8253_timer_overage = 0;
-	total_time_elapsed = 0.0;
+
+
+
 	last_instruction_cycles = 0;
+	// cycles_done = 0;
 	last_instruction_time_us = 0.0;
+	total_time_elapsed = 0.0;
+	// VSYNC_cycle_count = 0;
+	e8253_timer_cycle_count = 0;
+	e8253_timer_overage = 0;
 	// reset_irq6 = false;
+	processor_wait_state = 0;
+	// turn debug mode 2 off until program counter target has been reached
+	debug_mode_2_active = 0;
 
 	// set processor selection to 8085
   active_processor = pr8085;
-	processor_wait_state = 0;
+
   /*
 	 >>>> RUN THE PROCESSORS <<<<
 	*/
   printf("\n\nStart running processors..\n\n");
   // --- run the processor(s) forever ---
   while(1) {
-
 		// check if instruction pointer (IP) has been reached for dubug mode 2
 		handleDebug2Mode();
     // if active processor is the 8085

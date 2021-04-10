@@ -1505,12 +1505,13 @@ void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 	printf("%s%d\n", "rotational byte read limit (ns): ", w->rotational_byte_read_limit);
 
 	// now, get the total amount of bytes for the entire formatted disk
-	long formatted_disk_size = (w->cylinders * w->num_heads) * w->actual_num_track_bytes;
+	unsigned long formatted_disk_size = (w->cylinders * w->num_heads) * w->actual_num_track_bytes;
 
 	unsigned char fDiskArray[formatted_disk_size];
 	w->formattedDiskArray = fDiskArray;
-	long formattedDiskIndexPointer = 0;
-	long sectorPayloadArrayIndexPointer = 0;
+
+	unsigned long formattedDiskIndexPointer = 0;
+	unsigned long sectorPayloadArrayIndexPointer = 0;
 
 	/* ** start making formatted disk array ** */
 
@@ -1620,7 +1621,7 @@ void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 				// write DATA AM byte
 				w->formattedDiskArray[formattedDiskIndexPointer] = DATA_AM_BYTE;
 				formattedDiskIndexPointer++;
-				// write appropriate data payload
+				// write the data payload
 				for(int ct = 0; ct < w->sector_length; ct++) {
 					w->formattedDiskArray[formattedDiskIndexPointer] =
 						sectorPayloadDataBytes[sectorPayloadArrayIndexPointer];
@@ -1664,6 +1665,7 @@ unsigned char getFDiskByte(JWD1797* w) {
 		(w->current_track * w->actual_num_track_bytes);
 	// which head (side)?
 	r_byte_pt = r_byte_pt + (w->sso_pin * (w->actual_num_track_bytes * w->cylinders));
+
 	return w->formattedDiskArray[r_byte_pt];
 }
 
