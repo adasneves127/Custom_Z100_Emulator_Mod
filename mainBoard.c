@@ -99,6 +99,7 @@ void timer_ext_2();
 void handleDebug2Mode();
 void handle8085InstructionCycle();
 void handle8088InstructionCycle();
+void updateElapsedVirtualTime();
 void simulateVSYNCInterrupt();
 void handle8253TimerClockCycle();
 void updateZ100Screen();
@@ -224,11 +225,8 @@ int z100_main() {
 			handle8088InstructionCycle();
 		}
 
-		// calculate time passed with the last instruction execution
-		// number of cycles for last instruction * 0.2 microseconds (5 MHz clock)
-		last_instruction_time_us = last_instruction_cycles * 0.2;
-		// increment the time total_time_elapsed based on the last instruction time
-		total_time_elapsed += last_instruction_time_us;
+		// calculate virtual time passed with the last instruction execution
+		updateElapsedVirtualTime();
 
     /* simulate VSYNC interrupt on I6 (keyboard video display and light pen int)
 			roughly every 10,000 instructions - This satisfies BIOS diagnostics,
@@ -475,7 +473,6 @@ unsigned int z100_port_read(unsigned int address) {
 			return_value = readJWD1797(jwd1797, address);
       printf("reading %X from Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
         return_value, address);
-
       break;
     // Video Commands - 68A21 parallel port
     case 0xD8:
@@ -803,13 +800,13 @@ void z100_port_write(unsigned int address, unsigned char data) {
     // slave interrupt controler (8259) ports F0 and F1
     case 0xF0:
     case 0xF1:
-      // printf("writing %X to slave interrupt controller port %X\n", data, address);
+      printf("writing %X to slave interrupt controller port %X\n", data, address);
       e8259_set_uint8(e8259_slave, address&1, data);
       break;
     // master interrupt controler (8259) ports F2 and F3
     case 0xF2:
     case 0xF3:
-      // printf("writing %X to master interrupt controller port %X\n", data, address);
+      printf("writing %X to master interrupt controller port %X\n", data, address);
       e8259_set_uint8(e8259_master, address&1, data);
       break;
     // keyboard command port F5
@@ -893,6 +890,8 @@ int pr8085_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num
 
 int pr8088_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
 	// if 8088 "in" instruction and reading from WD1797 data register (port 0xB3)
+	/* MUST ALSO INCLUDE PORT 0xB5!! COMPUTER MUST WAIT FOR AN INTRQ signal from
+		FD-1797 when reading the status port dusring the SEEK command! */
 	if(((opCode == 0xe4) || (opCode == 0xe5) || (opCode == 0xec) || (opCode == 0xed))
 		&& (port_num == 0xb3)) {
 		return 1;
@@ -901,14 +900,30 @@ int pr8088_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num
 }
 
 void handleDebug2Mode() {
-	if(debug_mode == '2') {
-		if((active_processor == pr8085) && (p8085.PC == breakAtInstruction)) {
+	// if(debug_mode == '2') {
+	// 	if((active_processor == pr8085) && (p8085.PC == breakAtInstruction)) {
+	// 		debug_mode_2_active = 1;
+	// 	}
+	// 	else if((active_processor == pr8088) && (p8088->IP == breakAtInstruction)) {
+	// 		debug_mode_2_active = 1;
+	// 	}
+	// }
+
+	// if(jwd1797->id_field_data[0] == 1 && jwd1797->id_field_data[1] == 1 &&
+	// 	jwd1797->id_field_data[2] == 4 && jwd1797->intrq == 1) {
+	// 		debug_mode_2_active = 1;
+	// 	}
+
+	// if(p8088->investigate_opcode == 0x64) {
+	// 		debug_mode_2_active = 1;
+	// }
+
+	if(jwd1797->commandRegister == 0x8A && jwd1797->sectorRegister == 0x04 &&
+		jwd1797->controlLatch == 0x18 && jwd1797->controlStatus == 0x03 &&
+		jwd1797->id_field_data[0] == 0x01) {
 			debug_mode_2_active = 1;
 		}
-		else if((active_processor == pr8088) && (p8088->IP == breakAtInstruction)) {
-			debug_mode_2_active = 1;
-		}
-	}
+
 }
 
 void handle8085InstructionCycle() {
@@ -974,6 +989,13 @@ void handle8088InstructionCycle() {
 		printf("trap = %X, int = %X, dir = %X, overflow = %X\n",
 			p8088->t,p8088->i,p8088->d,p8088->o);
 	}
+}
+
+void updateElapsedVirtualTime() {
+	// number of cycles for last instruction * 0.2 microseconds (5 MHz clock)
+	last_instruction_time_us = last_instruction_cycles * 0.2;
+	// increment the time total_time_elapsed based on the last instruction time
+	total_time_elapsed += last_instruction_time_us;
 }
 
 void simulateVSYNCInterrupt() {

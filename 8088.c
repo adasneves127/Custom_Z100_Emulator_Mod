@@ -92,6 +92,7 @@ unsigned int fetch_x86(P8088* p8088)
 
 void trap(P8088* p8088, unsigned int number)
 {
+	printf("%s\n", "** INTERRUPT SENT TO 8088 TRAP **");
 	unsigned int flags=(p8088->o<<11)|(p8088->d<<10)|(p8088->i<<9)|(p8088->t<<8)|(p8088->s<<7)|(p8088->z<<6)|(p8088->ac<<4)|(p8088->p<<2)|(p8088->c<<0);
 	unsigned int cs=p8088->CS;
 	unsigned int ip=p8088->IP;
@@ -574,7 +575,7 @@ void doInstruction8088(P8088* p8088)
 		cycles+=2;
 	} while(isprefix);
 
-
+	p8088->investigate_opcode = opcode;
 	//---------------------------------------------execute------------------------------------------
 	switch(opcode)
 	{

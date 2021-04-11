@@ -28,6 +28,9 @@ typedef struct
 	load_function memory_read_x86;
 	load_function port_read_x86;
 
+	// debug
+	unsigned char investigate_opcode;
+
 } P8088;
 
 P8088* new8088();

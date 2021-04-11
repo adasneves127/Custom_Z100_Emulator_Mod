@@ -271,7 +271,7 @@ unsigned int readJWD1797(JWD1797* jwd_controller, unsigned int port_addr) {
 			break;
 		// controller status port (read)
 		case 0xb5:
-			printf("reading from WD1797 control status port 0xB5\n");
+			// printf("reading from WD1797 control status port 0xB5\n");
 			r_val = jwd_controller->controlStatus;
 			break;
 		default:
@@ -1406,30 +1406,8 @@ void handleHLTTimer(JWD1797* w, double time) {
 }
 
 void updateControlStatus(JWD1797* w) {
-	// get busy status from status register
-	unsigned char busy_stat = (w->statusRegister & 0b00000001);
 	// set busy bit 0 based on status register bit 0
-	w->controlStatus = w->controlStatus | busy_stat;
-	// get ready status (always ready)
-	unsigned char ready_stat = (~(w->ready_pin << 7)) & 0b10000000;
-	// set ready status bit 7
-	w->controlStatus = w->controlStatus | ready_stat;
-	// make write protect always off - bit 6
-	w->controlStatus = w->controlStatus & 0b10111111;
-	// get HLT_pin status for headload stat
-	unsigned char head_load_stat = (w->HLT_pin << 5) & 0b00100000;
-	// set ready status bit 5
-	w->controlStatus = w->controlStatus | head_load_stat;
-	// set SEEK and CRC error to always 0 (never error status) - bits 3 and 4
-	w->controlStatus = w->controlStatus & 0b11100111;
-	// get track zero status from not track zero pin
-	unsigned char track_zero_status = (~(w->not_track00_pin << 2)) & 0b00000100;
-	// set track zero status
-	w->controlStatus = w->controlStatus | track_zero_status;
-	// get index pulse pin status
-	unsigned char index_pulse = (w->index_pulse_pin << 1) & 0b00000010;
-	// set index pulse status
-	w->controlStatus = w->controlStatus | index_pulse;
+	w->controlStatus = (w->intrq & 1) | ((0x01 & 1) << 1) | ((w->drq & 1) << 7);
 }
 
 // http://www.cplusplus.com/reference/cstdio/fread/
