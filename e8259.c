@@ -274,7 +274,7 @@ void e8259_set_irq2 (e8259_t *pic, unsigned char val)
 
 void e8259_set_irq3 (e8259_t *pic, unsigned char val)
 {
-	printf("set %s IRQ3 PIN to %X\n", pic->label, val != 0);
+	// printf("set %s IRQ3 PIN to %X\n", pic->label, val != 0);
 	e8259_set_irq (pic, 3, val != 0);
 }
 

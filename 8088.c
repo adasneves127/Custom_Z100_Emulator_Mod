@@ -1711,6 +1711,7 @@ void doInstruction8088(P8088* p8088)
 		case 0x73:
 		{
 			unsigned int imm=fetch_x86(p8088);
+			value1 = imm;
 			if((imm&0x80)!=0)
 				imm|=0xff00;
 			if(!p8088->c)
@@ -1729,6 +1730,7 @@ void doInstruction8088(P8088* p8088)
 		case 0x74:
 		{
 			unsigned int imm=fetch_x86(p8088);
+			value1 = imm;
 			if((imm&0x80)!=0)
 				imm|=0xff00;
 			if(p8088->z)
@@ -3574,7 +3576,9 @@ void doInstruction8088(P8088* p8088)
 		case 0xe6:
 			name_opcode="out al imm8";
 			result=fetch_x86(p8088);
+			value2 = result;
 			port_write_x86(p8088,result,p8088->AL);
+			value1 = p8088->AL;
 			cycles+=11;
 			break;
 

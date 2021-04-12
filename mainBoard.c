@@ -65,6 +65,10 @@ unsigned char switch_s101_FF;
 unsigned char processor_swap_port_FE;
 unsigned char memory_control_latch_FC;
 unsigned char io_diag_port_F6; // not needed without external diag device
+// DEBUG
+unsigned char debug_test_port;
+unsigned char debug_timer2;
+unsigned char debug_int6;
 
 unsigned char rom[ROM_SIZE];
 unsigned char ram[RAM_SIZE];
@@ -208,6 +212,9 @@ int z100_main() {
 	// set processor selection to 8085
   active_processor = pr8085;
 
+	debug_test_port = 0x00;
+	debug_timer2 = 0x00;
+	debug_int6 = 0x00;
   /*
 	 >>>> RUN THE PROCESSORS <<<<
 	*/
@@ -299,6 +306,7 @@ void timer_out_1(void* v, int number) {
 void timer_out_2(void* v, int number) {
 	printf("timer out 2\n");
 	e8259_set_irq2(e8259_master, 1);
+	debug_timer2 = 1;
 }
 // void timer_ext_2() {printf("timer ext 2\n");}
 
@@ -471,8 +479,8 @@ unsigned int z100_port_read(unsigned int address) {
     case 0xB5:
 			// Z-207 Primary Floppy Drive Controller CNTRL Status Port
 			return_value = readJWD1797(jwd1797, address);
-      printf("reading %X from Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
-        return_value, address);
+      // printf("reading %X from Z-207 Primary Floppy Drive Controller CNTRL Status Port %X\n",
+      //   return_value, address);
       break;
     // Video Commands - 68A21 parallel port
     case 0xD8:
@@ -756,6 +764,12 @@ void z100_port_write(unsigned int address, unsigned char data) {
       // printf("writing %X to 8253 timer control port %X\n", data, address);
       e8253_set_uint8(e8253, address&3, data&0xff);
       break;
+		case 0xEF:
+      // Serial B (modem port)
+      printf("writing %X to Serial B modem port %X\n", data, address);
+			// DEBUG
+      debug_test_port = data;
+      break;
     case 0xFB:
       // 8253 timer status port
       // printf("writing %X to 8253 timer status port %X\n", data, address);
@@ -853,7 +867,7 @@ void z100_port_write(unsigned int address, unsigned char data) {
       break;
     // unimplemented port
     default:
-  		printf("WRITING TO UNIMPLEMENTED PORT %X\n",address);
+  		printf("WRITING %X TO UNIMPLEMENTED PORT %X\n", data, address);
       break;
   }
 }
@@ -900,14 +914,41 @@ int pr8088_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num
 }
 
 void handleDebug2Mode() {
-	// if(debug_mode == '2') {
-	// 	if((active_processor == pr8085) && (p8085.PC == breakAtInstruction)) {
-	// 		debug_mode_2_active = 1;
-	// 	}
-	// 	else if((active_processor == pr8088) && (p8088->IP == breakAtInstruction)) {
-	// 		debug_mode_2_active = 1;
-	// 	}
-	// }
+	// HARDCODE AL REGISTER TO GET PAST Z-DOS INTERRUPT LOOP
+	if(p8088->IP == 0xECF) {
+		// p8088->AL = 0x00;
+	}
+	/* DEBUG: This condition is used to check interrupts' effect on Z-dos
+	infinite loop */
+	if(p8088->IP == 0xEE7) {
+		// printf("SET ALL INTERRUPTS HIGH!\n");
+		// e8259_set_irq0(e8259_master, 1);
+		// e8259_set_irq1(e8259_master, 1);
+		// e8259_set_irq2(e8259_master, 1);
+		// e8259_set_irq3(e8259_master, 1);
+		// e8259_set_irq4(e8259_master, 1);
+		// e8259_set_irq5(e8259_master, 1);
+	 	// e8259_set_irq6(e8259_master, 1);
+		// e8259_set_irq7(e8259_master, 1);
+		//
+		// e8259_set_irq0(e8259_slave, 1);
+		// e8259_set_irq1(e8259_slave, 1);
+		// e8259_set_irq2(e8259_slave, 1);
+		// e8259_set_irq3(e8259_slave, 1);
+		// e8259_set_irq4(e8259_slave, 1);
+		// e8259_set_irq5(e8259_slave, 1);
+	 	// e8259_set_irq6(e8259_slave, 1);
+		// e8259_set_irq7(e8259_slave, 1);
+	}
+
+	if(debug_mode == '2') {
+		if((active_processor == pr8085) && (p8085.PC == breakAtInstruction)) {
+			debug_mode_2_active = 1;
+		}
+		else if((active_processor == pr8088) && (p8088->IP == breakAtInstruction)) {
+			debug_mode_2_active = 1;
+		}
+	}
 
 	// if(jwd1797->id_field_data[0] == 1 && jwd1797->id_field_data[1] == 1 &&
 	// 	jwd1797->id_field_data[2] == 4 && jwd1797->intrq == 1) {
@@ -918,11 +959,15 @@ void handleDebug2Mode() {
 	// 		debug_mode_2_active = 1;
 	// }
 
-	if(jwd1797->commandRegister == 0x8A && jwd1797->sectorRegister == 0x04 &&
-		jwd1797->controlLatch == 0x18 && jwd1797->controlStatus == 0x03 &&
-		jwd1797->id_field_data[0] == 0x01) {
-			debug_mode_2_active = 1;
-		}
+	// if(jwd1797->commandRegister == 0x8A && jwd1797->sectorRegister == 0x04 &&
+	// 	jwd1797->controlLatch == 0x18 && jwd1797->controlStatus == 0x03 &&
+	// 	jwd1797->id_field_data[0] == 0x01) {
+	// 		debug_mode_2_active = 1;
+	// }
+
+	// if(jwd1797->intrq == 1 && debug_test_port == 0x14 && debug_timer2 == 1) {
+	// 		debug_mode_2_active = 1;
+	// }
 
 }
 
@@ -1003,10 +1048,12 @@ void simulateVSYNCInterrupt() {
 		// printf("%s\n", "*** KEYINT or DSPYINT/VSYNC interrupt occurred - I6 from Master PIC ***");
 		// set the irq6 pin on the master 8259 int controller to high
 		e8259_set_irq6(e8259_master, 1);
+		debug_int6 = 1;
 	}
 	else if(instructions_done%10000 == 10000-1) {
 		// set the irq6 pin to low
 		e8259_set_irq6(e8259_master, 0);
+		debug_int6 = 0;
 	}
 }
 
@@ -1041,26 +1088,26 @@ void handleDebugOutput() {
 		printf("instructions done: %ld\n", instructions_done);
 		printf("%s%f\n", "last instruction time (us): ", last_instruction_time_us);
 		printf("TOTAL TIME ELAPSED (us): %f\n", total_time_elapsed);
-		printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
-			jwd1797->rotational_byte_pointer);
-		printf("%s%d\n", "JWD1797 ROTATIONAL BYTE TIMER (ns): ",
-			jwd1797->rotational_byte_read_timer);
-		printf("%s%d\n", "JWD1797 ROTATIONAL BYTE TIMER OVR (ns): ",
-			jwd1797->rotational_byte_read_timer_OVR);
-		printf("%s%02X\n", "Current Byte: ", getFDiskByte(jwd1797));
-		printf("%s%f\n", "HEAD LOAD Timer: ", jwd1797->HLT_timer);
-		printf("%s%f\n", "E Delay Timer: ", jwd1797->e_delay_timer);
-		printf("%s", "FD-1797 Status Reg.: " );
-		print_bin8_representation(jwd1797->statusRegister);
-		printf("%s", "Disk ID Field Data: " );
-		printByteArray(jwd1797->id_field_data, 6);
-		fD1797DebugOutput();
+		// fD1797DebugOutput();
 		getchar();
 	}
 }
 
 void fD1797DebugOutput() {
 	// DEBUG FD-1797 Floppy Disk Controller
+	printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
+		jwd1797->rotational_byte_pointer);
+	printf("%s%d\n", "JWD1797 ROTATIONAL BYTE TIMER (ns): ",
+		jwd1797->rotational_byte_read_timer);
+	printf("%s%d\n", "JWD1797 ROTATIONAL BYTE TIMER OVR (ns): ",
+		jwd1797->rotational_byte_read_timer_OVR);
+	printf("%s%02X\n", "Current Byte: ", getFDiskByte(jwd1797));
+	printf("%s%f\n", "HEAD LOAD Timer: ", jwd1797->HLT_timer);
+	printf("%s%f\n", "E Delay Timer: ", jwd1797->e_delay_timer);
+	printf("%s", "FD-1797 Status Reg.: " );
+	print_bin8_representation(jwd1797->statusRegister);
+	printf("%s", "Disk ID Field Data: " );
+	printByteArray(jwd1797->id_field_data, 6);
 	printf("%s", "data a1 byte count: ");
   printf("%d\n", jwd1797->data_a1_byte_counter);
   printf("%s", "data AM search count: ");
@@ -1069,12 +1116,11 @@ void fD1797DebugOutput() {
   printf("%d\n", jwd1797->data_mark_found);
   printf("%s", "Sector length count: ");
   printf("%d\n", jwd1797->intSectorLength);
-
   printf("%s%d\n", "DRQ: ", jwd1797->drq);
   printf("%s%02X\n", "DATA REGISTER: ", jwd1797->dataRegister);
   printf("%s", "SECTOR REGISTER: ");
   print_bin8_representation(jwd1797->sectorRegister);
-  printf("%s\n", "");
+  printf("%s", "");
   printf("%s", "TYPE II STATUS REGISTER: ");
   print_bin8_representation(jwd1797->statusRegister);
   printf("%s\n", "");

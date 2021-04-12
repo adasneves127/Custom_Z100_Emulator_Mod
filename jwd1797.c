@@ -219,7 +219,7 @@ void resetJWD1797(JWD1797* jwd_controller) {
 
 	/* make a formatted disk array from the disk data payload image file.
 	 	will be held in jwd_controller->formattedDiskArray */
-	assembleFormattedDiskArray(jwd_controller, "z-dos-1.img");
+	assembleFormattedDiskArray(jwd_controller, "Z_DOS_ver1.bin");
 }
 
 // read data from wd1797 according to port
@@ -1493,11 +1493,11 @@ void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 
 	/* ** start making formatted disk array ** */
 
-	// for each side (head)
-	for(int h = 0; h < w->num_heads; h++) {
+	// for each cylinder
+	for(int cyl = 0; cyl < w->cylinders; cyl++) {
 
-		// for each track
-		for(int t = 0; t < w->cylinders; t++) {
+		// for each head
+		for(int h = 0; h < w->num_heads; h++) {
 
 			// write GAP4A
 			for(int ct = 0; ct < GAP4A_LENGTH; ct++) {
@@ -1545,7 +1545,7 @@ void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 				w->formattedDiskArray[formattedDiskIndexPointer] = ID_AM_BYTE;
 				formattedDiskIndexPointer++;
 				// write cylinder byte (track)
-				w->formattedDiskArray[formattedDiskIndexPointer] = t;
+				w->formattedDiskArray[formattedDiskIndexPointer] = cyl;
 				formattedDiskIndexPointer++;
 				// write head byte (side)
 				w->formattedDiskArray[formattedDiskIndexPointer] = h;
@@ -1627,9 +1627,10 @@ void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 				formattedDiskIndexPointer++;
 			}
 
-		} // END TRACK LOOP
+		}	// END HEAD LOOP
 
-	} // END SIDE LOOP
+	} // END CYLINDER LOOP
+
 	/* * * DEBUG * * */
  	// printByteArray(w->formattedDiskArray, 1500);
 }
@@ -1638,11 +1639,12 @@ void assembleFormattedDiskArray(JWD1797* w, char* fileName) {
 	based on the rotational byte position, actual track (w->current_track),
 	and side select/head (w->sso_pin) */
 unsigned char getFDiskByte(JWD1797* w) {
-	// determine byte pointer on side 1 (head = 0)
-	long r_byte_pt = w->rotational_byte_pointer +
-		(w->current_track * w->actual_num_track_bytes);
-	// which head (side)?
-	r_byte_pt = r_byte_pt + (w->sso_pin * (w->actual_num_track_bytes * w->cylinders));
+	// advance 2 tracks worth of formatted bytes for each cylinder (track)
+	long r_byte_pt = w->current_track * (w->actual_num_track_bytes * 2);
+	// what head (side)? Head == 1? Add 1 formatted track's worth of bytes
+	r_byte_pt += w->actual_num_track_bytes * w->sso_pin;
+	// now add where the head is located in the rotation
+	r_byte_pt += w->rotational_byte_pointer;
 
 	return w->formattedDiskArray[r_byte_pt];
 }
