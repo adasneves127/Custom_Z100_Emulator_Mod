@@ -23,14 +23,14 @@
 
 #define ROM_SIZE 0x4000
 #define RAM_SIZE 0x30000
-// (116736 cycles = 0.0233472 seconds)
-// #define VSYNC_CYCLE_LIMIT 116736
 /* (20 cycles = 4 microseconds, EDIT - 8253 timer is connected to a 250kHz
 	clock according to page 2.80 Z-100 Technical manual (hardware) - clocked
 	every 120 cycles */
 #define E8253_TIMER_CYCLE_LIMIT 20
-// (5 CPU cycles = 1 microsecond)
-// #define JWD1797_CYCLE_LIMIT 5
+/* 83,333 cycles = 16,666.6 microseconds, VSYNC occurs at 60 Hz
+ 	along with the display refresh rate
+	(page 4.46 Z-100 Technical manual (hardware)) */
+#define VSYNC_TIMER_CYCLE_LIMIT 83333
 
 enum active_processor{pr8085, pr8088};
 enum active_processor active_processor;
@@ -38,14 +38,12 @@ int processor_wait_state;
 
 // rough clock to keep track of time passing (us) as instructions are executed
 double total_time_elapsed;
-
 unsigned long instructions_done;
-// unsigned long cycles_done;
 unsigned long breakAtInstruction;
-// unsigned int VSYNC_cycle_count;
+unsigned int vsync_timer_cycle_count;
+unsigned int vsync_timer_overage;
 unsigned int e8253_timer_cycle_count;
 unsigned int e8253_timer_overage;
-// unsigned int jwd1797_cycle_count;
 int last_instruction_cycles;
 double last_instruction_time_us;
 
@@ -194,21 +192,16 @@ int z100_main() {
 		***** initialize all counts to zero *****
 	*/
   instructions_done = 0;
-
-
-
 	last_instruction_cycles = 0;
-	// cycles_done = 0;
 	last_instruction_time_us = 0.0;
 	total_time_elapsed = 0.0;
-	// VSYNC_cycle_count = 0;
+	vsync_timer_cycle_count = 0;
+	vsync_timer_overage = 0;
 	e8253_timer_cycle_count = 0;
 	e8253_timer_overage = 0;
-	// reset_irq6 = false;
 	processor_wait_state = 0;
 	// turn debug mode 2 off until program counter target has been reached
 	debug_mode_2_active = 0;
-
 	// set processor selection to 8085
   active_processor = pr8085;
 
@@ -271,7 +264,7 @@ int z100_main() {
 
 
 //=============================================================================
-//                         ** function definitions **
+//										***** FUNCTION DEFINITIONS *****
 //=============================================================================
 
 void interruptFunctionCall(void* v, int number) {
@@ -316,6 +309,409 @@ int getParity(unsigned int data) {
   ((data&256)!=0) ^ ((data&512)!=0) ^ ((data&1024)!=0) ^ ((data&2048)!=0) ^
   ((data&4096)!=0) ^ ((data&8192)!=0) ^ ((data&16384)!=0) ^ ((data&32768)!=0);
 }
+
+// open the bin file for the Z100 ROM and load it into the rom array
+// modified from Michael Black's Z100 implementation (z100.c)
+void loadrom(char* fname) {
+	FILE* f = fopen(fname,"rb");
+	for(int i = 0; i < ROM_SIZE; i++) {
+    rom[i] = fgetc(f);
+  }
+	fclose(f);
+}
+
+void initialize_z100_ports() {
+  // this will be the S101 Switch - selects functions to be run during start-up
+  // and master reset. (Page 2.8 in Z100 technical manual for pin defs)
+  switch_s101_FF = 0b00000000;
+  // processor swap ports
+  processor_swap_port_FE = 0b00000000;
+	// memeory control latch
+  memory_control_latch_FC = 0b00000000;
+  // io_diag_port
+  io_diag_port_F6 = 0b11111111;
+}
+
+int pr8085_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
+	// if 8085 "in" instruction and reading from WD1797 data register (port 0xB3)
+	if((opCode == 0xdb) && (port_num == 0xb3)) {
+		return 1;
+	}
+	return 0;
+}
+
+int pr8088_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
+	// if 8088 "in" instruction and reading from WD1797 data register (port 0xB3)
+	/* MUST ALSO INCLUDE PORT 0xB5!! COMPUTER MUST WAIT FOR AN INTRQ signal from
+		FD-1797 when reading the status port dusring the SEEK command! */
+	if(((opCode == 0xe4) || (opCode == 0xe5) || (opCode == 0xec) || (opCode == 0xed))
+		&& (port_num == 0xb3)) {
+		return 1;
+		}
+	return 0;
+}
+
+void handleDebug2Mode() {
+
+	if(debug_mode == '2') {
+		if((active_processor == pr8085) && (p8085.PC == breakAtInstruction)) {
+			debug_mode_2_active = 1;
+		}
+		else if((active_processor == pr8088) && (p8088->IP == breakAtInstruction)) {
+			debug_mode_2_active = 1;
+		}
+	}
+
+	// if(jwd1797->id_field_data[0] == 1 && jwd1797->id_field_data[1] == 1 &&
+	// 	jwd1797->id_field_data[2] == 4 && jwd1797->intrq == 1) {
+	// 		debug_mode_2_active = 1;
+	// 	}
+
+	// if(p8088->investigate_opcode == 0x64) {
+	// 		debug_mode_2_active = 1;
+	// }
+
+	// if(jwd1797->commandRegister == 0x8A && jwd1797->sectorRegister == 0x04 &&
+	// 	jwd1797->controlLatch == 0x18 && jwd1797->controlStatus == 0x03 &&
+	// 	jwd1797->id_field_data[0] == 0x01) {
+	// 		debug_mode_2_active = 1;
+	// }
+
+	// if(jwd1797->intrq == 1 && debug_test_port == 0x14 && debug_timer2 == 1) {
+	// 		debug_mode_2_active = 1;
+	// }
+
+	// HARDCODE AL REGISTER TO GET PAST Z-DOS INTERRUPT LOOP
+	if(p8088->IP == 0xECF) {
+		// p8088->AL = 0x00;
+	}
+	/* DEBUG: This condition is used to check interrupts' effect on Z-dos
+	infinite loop */
+	if(p8088->IP == 0xEE7) {
+		// printf("SET ALL INTERRUPTS HIGH!\n");
+		// e8259_set_irq0(e8259_master, 1);
+		// e8259_set_irq1(e8259_master, 1);
+		// e8259_set_irq2(e8259_master, 1);
+		// e8259_set_irq3(e8259_master, 1);
+		// e8259_set_irq4(e8259_master, 1);
+		// e8259_set_irq5(e8259_master, 1);
+	 	// e8259_set_irq6(e8259_master, 1);
+		// e8259_set_irq7(e8259_master, 1);
+		//
+		// e8259_set_irq0(e8259_slave, 1);
+		// e8259_set_irq1(e8259_slave, 1);
+		// e8259_set_irq2(e8259_slave, 1);
+		// e8259_set_irq3(e8259_slave, 1);
+		// e8259_set_irq4(e8259_slave, 1);
+		// e8259_set_irq5(e8259_slave, 1);
+	 	// e8259_set_irq6(e8259_slave, 1);
+		// e8259_set_irq7(e8259_slave, 1);
+	}
+}
+
+void handle8085InstructionCycle() {
+	// update data request signal from JWD1797 drq pin
+	p8085.ready_ = jwd1797->drq;
+	doInstruction8085(&p8085);
+	// if processor is NOT in a wait state
+	if(p8085.wait_state == 0) {
+		instructions_done++;
+		last_instruction_cycles = p8085.cycles;
+	}
+	/* processor is in a wait state
+		- no instruction done
+		- 1 clock cycle passes (200 ns for 5 MHz clock) */
+	else {
+		last_instruction_cycles = 1;
+	}
+	if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+		(debug_mode_2_active == 1)) {
+		printf("PC = %X, opcode = %X, inst = %s\n",p8085.PC,p8085.opcode,p8085.name);
+		printf("A = %X, B = %X, C = %X, D = %X, E = %X, H = %X, L = %X, SP = %X\n",
+			p8085.A, p8085.B, p8085.C, p8085.D, p8085.E, p8085.H, p8085.L, p8085.SP);
+		printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
+			p8085.c, p8085.p, p8085.ac, p8085.z, p8085.s);
+		printf("i = %X, m75 = %X, m65 = %X, m55 = %X\n",
+			p8085.i, p8085.m75, p8085.m65, p8085.m55);
+	}
+}
+
+void handle8088InstructionCycle() {
+	// update data request signal from JWD1797 drq pin
+	p8088->ready_x86_ = jwd1797->drq;
+	doInstruction8088(p8088);
+	// if processor is NOT in a wait state
+	if(p8088->wait_state_x86 == 0) {
+		instructions_done++;
+		last_instruction_cycles = p8088->cycles;
+	}
+	/* processor is in a wait state
+		- no instruction done
+		- 1 clock cycle passes (200 ns for 5 MHz clock) */
+	else {
+		last_instruction_cycles = 1;
+	}
+	/* increment cycles_done to add the number of cycles the current
+	instruction took */
+	// cycles_done = cycles_done + p8088->cycles;
+	// only print processor status if debug conditions are met
+	if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+		(debug_mode_2_active == 1)) {
+		printf("IP = %X, opcode = %X, inst = %s\n",
+			p8088->IP,p8088->opcode,p8088->name_opcode);
+		printf("value1 = %X, value2 = %X, result = %X cycles = %d\n",
+			p8088->operand1,p8088->operand2,p8088->op_result,p8088->cycles);
+		printf("AL = %X, AH = %X, BL = %X, BH = %X, CL = %X, CH = %X, DL = %X, DH = %X\n"
+			"SP = %X, BP = %X, DI = %X, SI = %X\n"
+			"CS = %X, SS = %X, DS = %X, ES = %X\n",
+			p8088->AL, p8088->AH,p8088->BL,p8088->BH,p8088->CL,p8088->CH,p8088->DL,
+			p8088->DH,p8088->SP,p8088->BP,p8088->DI,p8088->SI,p8088->CS,p8088->SS,
+			p8088->DS,p8088->ES);
+		printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
+			p8088->c,p8088->p,p8088->ac,p8088->z,p8088->s);
+		printf("trap = %X, int = %X, dir = %X, overflow = %X\n",
+			p8088->t,p8088->i,p8088->d,p8088->o);
+	}
+}
+
+void updateElapsedVirtualTime() {
+	// number of cycles for last instruction * 0.2 microseconds (5 MHz clock)
+	last_instruction_time_us = last_instruction_cycles * 0.2;
+	// increment the time total_time_elapsed based on the last instruction time
+	total_time_elapsed += last_instruction_time_us;
+}
+
+void simulateVSYNCInterrupt() {
+	// update VSYNC cycle count
+	vsync_timer_cycle_count += last_instruction_cycles;
+
+	if(vsync_timer_cycle_count >= VSYNC_TIMER_CYCLE_LIMIT) {
+		// this will account for any additional cycles not used for this clock cycle
+		vsync_timer_overage = vsync_timer_cycle_count - VSYNC_TIMER_CYCLE_LIMIT;
+		// printf("%s\n", "*** KEYINT or DSPYINT/VSYNC interrupt occurred - I6 from Master PIC ***");
+		// set the irq6 pin on the master 8259 int controller to high
+		e8259_set_irq6(e8259_master, 1);
+		debug_int6 = 1;
+		vsync_timer_cycle_count = vsync_timer_overage;
+	}
+
+	// reset VSYNC INT if pulse high
+	if(debug_int6 == 1) {
+		// set the irq6 pin to low
+		e8259_set_irq6(e8259_master, 0);
+		debug_int6 = 0;
+	}
+}
+
+void handle8253TimerClockCycle() {
+	// update timer cycle count
+	e8253_timer_cycle_count += last_instruction_cycles;
+	// printf("%s%d\n", "last_instruction_cycles: ", last_instruction_cycles);
+	// printf("%s%d\n", "e8253_timer_cycle_count: ", e8253_timer_cycle_count);
+	if(e8253_timer_cycle_count >= E8253_TIMER_CYCLE_LIMIT) {
+		// this will account for any additional cycles not used for this clock cycle
+		e8253_timer_overage = e8253_timer_cycle_count - E8253_TIMER_CYCLE_LIMIT;
+		// printf("%s%d\n", "e8253_timer_overage: ", e8253_timer_overage);
+		e8253_clock(e8253, 1);
+		e8253_timer_cycle_count = e8253_timer_overage;
+	}
+}
+
+void updateZ100Screen() {
+	if(instructions_done%100000 == 0) {
+		/* update pixel array using current VRAM state using renderScreen()
+			function from video.c */
+		renderScreen(video, pixels);
+		// draw pixels to the GTK window using display() function from screen.c
+		display();
+	}
+}
+
+void handleDebugOutput() {
+	if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
+		(debug_mode_2_active == 1)) {
+		// printf("\n");
+		printf("instructions done: %ld\n", instructions_done);
+		printf("%s%f\n", "last instruction time (us): ", last_instruction_time_us);
+		printf("TOTAL TIME ELAPSED (us): %f\n", total_time_elapsed);
+		// fD1797DebugOutput();
+		getchar();
+	}
+}
+
+void fD1797DebugOutput() {
+	// DEBUG FD-1797 Floppy Disk Controller
+	printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
+		jwd1797->rotational_byte_pointer);
+	printf("%s%d\n", "JWD1797 ROTATIONAL BYTE TIMER (ns): ",
+		jwd1797->rotational_byte_read_timer);
+	printf("%s%d\n", "JWD1797 ROTATIONAL BYTE TIMER OVR (ns): ",
+		jwd1797->rotational_byte_read_timer_OVR);
+	printf("%s%02X\n", "Current Byte: ", getFDiskByte(jwd1797));
+	printf("%s%f\n", "HEAD LOAD Timer: ", jwd1797->HLT_timer);
+	printf("%s%f\n", "E Delay Timer: ", jwd1797->e_delay_timer);
+	printf("%s", "FD-1797 Status Reg.: " );
+	print_bin8_representation(jwd1797->statusRegister);
+	printf("%s", "Disk ID Field Data: " );
+	printByteArray(jwd1797->id_field_data, 6);
+	printf("%s", "data a1 byte count: ");
+  printf("%d\n", jwd1797->data_a1_byte_counter);
+  printf("%s", "data AM search count: ");
+  printf("%d\n", jwd1797->data_mark_search_count);
+  printf("%s", "Data AM found: ");
+  printf("%d\n", jwd1797->data_mark_found);
+  printf("%s", "Sector length count: ");
+  printf("%d\n", jwd1797->intSectorLength);
+  printf("%s%d\n", "DRQ: ", jwd1797->drq);
+  printf("%s%02X\n", "DATA REGISTER: ", jwd1797->dataRegister);
+  printf("%s", "SECTOR REGISTER: ");
+  print_bin8_representation(jwd1797->sectorRegister);
+  printf("%s", "");
+  printf("%s", "TYPE II STATUS REGISTER: ");
+  print_bin8_representation(jwd1797->statusRegister);
+  printf("%s\n", "");
+}
+
+
+// ============================================================================
+														/* MAIN FUNCTIONS (ENTRY) */
+// ============================================================================
+
+// emulator thread function
+void* mainBoardThread(void* arg) {
+  // start the z100_main function defined here in mainBoard.c. This starts the
+  // actual emulation program.
+  z100_main();
+}
+
+// MAIN FUNCTION - ENTRY
+int main(int argc, char* argv[]) {
+
+	printf("\n\n%s\n\n",
+		" ===================================\n"
+		" |\tZENITH Z-100 EMULATOR\t   |\n"
+		" |\tby: Joe Matta\t\t   |\n"
+		" |\t8/2020 - 4/2021\t\t   |\n"
+		" ===================================");
+
+  char user_input_string[100];
+  char valid_enter_key_press;
+	debug_mode = '0';
+  /* user chooses DEBUG mode */
+  // loop until a valid entry is input by the user ('1', '2', or '3')
+  while(1) {
+    printf("%s", "\nChoose a mode:\n\n  1. Normal\n  2. DEBUG\n  3. EXIT\n\n>> ");
+    fgets(user_input_string, 100, stdin);
+    // check that the first character in the user's entry is '1', '2', or '3'
+    // also check that only one character was entered followed by a '\n'
+    if((user_input_string[0] < '1' || user_input_string[0] > '3') ||
+      user_input_string[1] != '\n') {
+      printf("%s\n", "INVALID ENTRY!\n");
+      // back to top of loop to reprint menu
+      continue;
+    }
+    /* entry valid - terminate loop with user_input_string[0] holding user's
+    menu choice */
+    break;
+  }
+
+  // process user choice
+  switch(user_input_string[0]) {
+    case '1' :
+      debug_mode = '0';
+      printf("%s\n\n", "\nNORMAL MODE");
+      break;
+    case '2' :
+      printf("%s\n\n", "\nDEBUG MODE");
+			while(1) {
+				// check that the first character in the user's entry is '1' or '2'
+		    // also check that only one character was entered followed by a '\n'
+		    printf(
+					"%s", "\nChoose a DEBUG mode:\n\n  1. Break at Instruction number\n  "
+					"2. Break at Instruction Pointer (IP) value\n  3. EXIT\n\n>> ");
+		    fgets(user_input_string, 100, stdin);
+				if((user_input_string[0] < '1' || user_input_string[0] > '3') ||
+		      user_input_string[1] != '\n') {
+		      printf("%s\n", "INVALID ENTRY!\n");
+		      // back to top of loop to reprint menu
+		      continue;
+		    }
+				break;
+			}
+
+      debug_mode = user_input_string[0];
+
+			switch(debug_mode) {
+				case '1' :
+					while(1) {
+		        printf("\nEnter an INSTRUCTION NUMBER to break at (integer >= 0).\n");
+		        printf("%s", "(Negative integers will give undesired break points.)\n\n>> ");
+		        fgets(user_input_string, 100, stdin);
+		        // https://stackoverflow.com/questions/4072190/check-if-input-is-integer-type-in-c
+		        if(sscanf(user_input_string, "%lu%c", &breakAtInstruction, &valid_enter_key_press) != 2 ||
+		          valid_enter_key_press != '\n') {
+	            printf("INVALID ENTRY: Enter a valid integer greater or equal to 0 (zero)!\n");
+	            // back to top of loop to display prompt again
+	            continue;
+		        }
+		        // valid entry - break from loop
+		        break;
+		      }
+		  		break;
+				case '2' :
+					while(1) {
+						printf("\nEnter an INSTRUCTION POINTER (IP) value to break at"
+							" (hexadecimal value without \"0x\" >= 0. MAX 8 hex digits).\n");
+						printf("%s", "(Negative values will give undesired break points.)\n\n>> ");
+						fgets(user_input_string, 100, stdin);
+						// convert hex string to int
+						int ip_break_at = hex2int(user_input_string);
+						// https://stackoverflow.com/questions/4072190/check-if-input-is-integer-type-in-c
+						if(ip_break_at == -1) {
+							printf("INVALID ENTRY: Enter a valid hex value greater or equal to 0 (zero)!\n");
+							// back to top of loop to display prompt again
+							continue;
+						}
+						// valid entry - break from loop
+						breakAtInstruction = ip_break_at;
+						break;
+					}
+					break;
+				case '3' :
+		      printf("%s\n", "\nEXITING Z-100 EMULATOR PROGRAM...\n");
+		      exit(0);
+		      break;
+		    default :
+		      printf("\nERROR - undefined behavior - EXITING Z-100 EMULATOR PROGRAM...\n\n" );
+		      exit(0);
+			}
+			break;
+    case '3' :
+      printf("%s\n", "\nEXITING Z-100 EMULATOR PROGRAM...\n");
+      exit(0);
+      break;
+    default :
+      printf("\nERROR - undefined behavior - EXITING Z-100 EMULATOR PROGRAM...\n\n" );
+      exit(0);
+  }
+
+  // allocate memory for array and initialize each pixel element to 0
+  // (uses generateScreen() function from video.c to set up the pixel array)
+  pixels = generateScreen();
+  // call initialization function defined in screen.c to set up a gtk window
+  screenInit(&argc, &argv);
+  // start main emulator thread
+  pthread_create(&emulator_thread, NULL, mainBoardThread, NULL);
+  // start GTK window thread
+  screenLoop();
+}
+
+
+/*
+		================================
+		***** READ/WRITE FUNCTIONS *****
+		================================
+*/
 
 unsigned int z100_memory_read_(unsigned int addr) {
   unsigned int return_value = 0x00;
@@ -870,392 +1266,4 @@ void z100_port_write(unsigned int address, unsigned char data) {
   		printf("WRITING %X TO UNIMPLEMENTED PORT %X\n", data, address);
       break;
   }
-}
-
-// open the bin file for the Z100 ROM and load it into the rom array
-// modified from Michael Black's Z100 implementation (z100.c)
-void loadrom(char* fname) {
-	FILE* f = fopen(fname,"rb");
-	for(int i = 0; i < ROM_SIZE; i++) {
-    rom[i] = fgetc(f);
-  }
-	fclose(f);
-}
-
-void initialize_z100_ports() {
-  // this will be the S101 Switch - selects functions to be run during start-up
-  // and master reset. (Page 2.8 in Z100 technical manual for pin defs)
-  switch_s101_FF = 0b00000000;
-  // processor swap ports
-  processor_swap_port_FE = 0b00000000;
-	// memeory control latch
-  memory_control_latch_FC = 0b00000000;
-  // io_diag_port
-  io_diag_port_F6 = 0b11111111;
-}
-
-int pr8085_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
-	// if 8085 "in" instruction and reading from WD1797 data register (port 0xB3)
-	if((opCode == 0xdb) && (port_num == 0xb3)) {
-		return 1;
-	}
-	return 0;
-}
-
-int pr8088_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
-	// if 8088 "in" instruction and reading from WD1797 data register (port 0xB3)
-	/* MUST ALSO INCLUDE PORT 0xB5!! COMPUTER MUST WAIT FOR AN INTRQ signal from
-		FD-1797 when reading the status port dusring the SEEK command! */
-	if(((opCode == 0xe4) || (opCode == 0xe5) || (opCode == 0xec) || (opCode == 0xed))
-		&& (port_num == 0xb3)) {
-		return 1;
-		}
-	return 0;
-}
-
-void handleDebug2Mode() {
-	// HARDCODE AL REGISTER TO GET PAST Z-DOS INTERRUPT LOOP
-	if(p8088->IP == 0xECF) {
-		// p8088->AL = 0x00;
-	}
-	/* DEBUG: This condition is used to check interrupts' effect on Z-dos
-	infinite loop */
-	if(p8088->IP == 0xEE7) {
-		// printf("SET ALL INTERRUPTS HIGH!\n");
-		// e8259_set_irq0(e8259_master, 1);
-		// e8259_set_irq1(e8259_master, 1);
-		// e8259_set_irq2(e8259_master, 1);
-		// e8259_set_irq3(e8259_master, 1);
-		// e8259_set_irq4(e8259_master, 1);
-		// e8259_set_irq5(e8259_master, 1);
-	 	// e8259_set_irq6(e8259_master, 1);
-		// e8259_set_irq7(e8259_master, 1);
-		//
-		// e8259_set_irq0(e8259_slave, 1);
-		// e8259_set_irq1(e8259_slave, 1);
-		// e8259_set_irq2(e8259_slave, 1);
-		// e8259_set_irq3(e8259_slave, 1);
-		// e8259_set_irq4(e8259_slave, 1);
-		// e8259_set_irq5(e8259_slave, 1);
-	 	// e8259_set_irq6(e8259_slave, 1);
-		// e8259_set_irq7(e8259_slave, 1);
-	}
-
-	if(debug_mode == '2') {
-		if((active_processor == pr8085) && (p8085.PC == breakAtInstruction)) {
-			debug_mode_2_active = 1;
-		}
-		else if((active_processor == pr8088) && (p8088->IP == breakAtInstruction)) {
-			debug_mode_2_active = 1;
-		}
-	}
-
-	// if(jwd1797->id_field_data[0] == 1 && jwd1797->id_field_data[1] == 1 &&
-	// 	jwd1797->id_field_data[2] == 4 && jwd1797->intrq == 1) {
-	// 		debug_mode_2_active = 1;
-	// 	}
-
-	// if(p8088->investigate_opcode == 0x64) {
-	// 		debug_mode_2_active = 1;
-	// }
-
-	// if(jwd1797->commandRegister == 0x8A && jwd1797->sectorRegister == 0x04 &&
-	// 	jwd1797->controlLatch == 0x18 && jwd1797->controlStatus == 0x03 &&
-	// 	jwd1797->id_field_data[0] == 0x01) {
-	// 		debug_mode_2_active = 1;
-	// }
-
-	// if(jwd1797->intrq == 1 && debug_test_port == 0x14 && debug_timer2 == 1) {
-	// 		debug_mode_2_active = 1;
-	// }
-
-}
-
-void handle8085InstructionCycle() {
-	// update data request signal from JWD1797 drq pin
-	p8085.data_request_ = jwd1797->drq;
-	doInstruction8085(&p8085);
-	// if processor is NOT in a wait state
-	if(p8085.wait_state == 0) {
-		instructions_done++;
-		last_instruction_cycles = p8085.cycles;
-	}
-	/* processor is in a wait state
-		- no instruction done
-		- 1 clock cycle passes (200 ns for 5 MHz clock) */
-	else {
-		last_instruction_cycles = 1;
-	}
-	if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-		(debug_mode_2_active == 1)) {
-		printf("PC = %X, opcode = %X, inst = %s\n",p8085.PC,p8085.opcode,p8085.name);
-		printf("A = %X, B = %X, C = %X, D = %X, E = %X, H = %X, L = %X, SP = %X\n",
-			p8085.A, p8085.B, p8085.C, p8085.D, p8085.E, p8085.H, p8085.L, p8085.SP);
-		printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
-			p8085.c, p8085.p, p8085.ac, p8085.z, p8085.s);
-		printf("i = %X, m75 = %X, m65 = %X, m55 = %X\n",
-			p8085.i, p8085.m75, p8085.m65, p8085.m55);
-	}
-}
-
-void handle8088InstructionCycle() {
-	// update data request signal from JWD1797 drq pin
-	p8088->data_request_x86_ = jwd1797->drq;
-	doInstruction8088(p8088);
-	// if processor is NOT in a wait state
-	if(p8088->wait_state_x86 == 0) {
-		instructions_done++;
-		last_instruction_cycles = p8088->cycles;
-	}
-	/* processor is in a wait state
-		- no instruction done
-		- 1 clock cycle passes (200 ns for 5 MHz clock) */
-	else {
-		last_instruction_cycles = 1;
-	}
-	/* increment cycles_done to add the number of cycles the current
-	instruction took */
-	// cycles_done = cycles_done + p8088->cycles;
-	// only print processor status if debug conditions are met
-	if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-		(debug_mode_2_active == 1)) {
-		printf("IP = %X, opcode = %X, inst = %s\n",
-			p8088->IP,p8088->opcode,p8088->name_opcode);
-		printf("value1 = %X, value2 = %X, result = %X cycles = %d\n",
-			p8088->operand1,p8088->operand2,p8088->op_result,p8088->cycles);
-		printf("AL = %X, AH = %X, BL = %X, BH = %X, CL = %X, CH = %X, DL = %X, DH = %X\n"
-			"SP = %X, BP = %X, DI = %X, SI = %X\n"
-			"CS = %X, SS = %X, DS = %X, ES = %X\n",
-			p8088->AL, p8088->AH,p8088->BL,p8088->BH,p8088->CL,p8088->CH,p8088->DL,
-			p8088->DH,p8088->SP,p8088->BP,p8088->DI,p8088->SI,p8088->CS,p8088->SS,
-			p8088->DS,p8088->ES);
-		printf("carry = %X, parity = %X, aux_carry = %X, zero = %X, sign = %X\n",
-			p8088->c,p8088->p,p8088->ac,p8088->z,p8088->s);
-		printf("trap = %X, int = %X, dir = %X, overflow = %X\n",
-			p8088->t,p8088->i,p8088->d,p8088->o);
-	}
-}
-
-void updateElapsedVirtualTime() {
-	// number of cycles for last instruction * 0.2 microseconds (5 MHz clock)
-	last_instruction_time_us = last_instruction_cycles * 0.2;
-	// increment the time total_time_elapsed based on the last instruction time
-	total_time_elapsed += last_instruction_time_us;
-}
-
-void simulateVSYNCInterrupt() {
-	if(instructions_done%10000 == 10000-2) {
-		// printf("%s\n", "*** KEYINT or DSPYINT/VSYNC interrupt occurred - I6 from Master PIC ***");
-		// set the irq6 pin on the master 8259 int controller to high
-		e8259_set_irq6(e8259_master, 1);
-		debug_int6 = 1;
-	}
-	else if(instructions_done%10000 == 10000-1) {
-		// set the irq6 pin to low
-		e8259_set_irq6(e8259_master, 0);
-		debug_int6 = 0;
-	}
-}
-
-void handle8253TimerClockCycle() {
-	// update timer cycle count
-	e8253_timer_cycle_count += last_instruction_cycles;
-	// printf("%s%d\n", "last_instruction_cycles: ", last_instruction_cycles);
-	// printf("%s%d\n", "e8253_timer_cycle_count: ", e8253_timer_cycle_count);
-	if(e8253_timer_cycle_count >= E8253_TIMER_CYCLE_LIMIT) {
-		// this will account for any additional cycles not used for this clock cycle
-		e8253_timer_overage = e8253_timer_cycle_count - E8253_TIMER_CYCLE_LIMIT;
-		// printf("%s%d\n", "e8253_timer_overage: ", e8253_timer_overage);
-		e8253_clock(e8253, 1);
-		e8253_timer_cycle_count = e8253_timer_overage;
-	}
-}
-
-void updateZ100Screen() {
-	if(instructions_done%100000 == 0) {
-		/* update pixel array using current VRAM state using renderScreen()
-			function from video.c */
-		renderScreen(video, pixels);
-		// draw pixels to the GTK window using display() function from screen.c
-		display();
-	}
-}
-
-void handleDebugOutput() {
-	if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
-		(debug_mode_2_active == 1)) {
-		// printf("\n");
-		printf("instructions done: %ld\n", instructions_done);
-		printf("%s%f\n", "last instruction time (us): ", last_instruction_time_us);
-		printf("TOTAL TIME ELAPSED (us): %f\n", total_time_elapsed);
-		// fD1797DebugOutput();
-		getchar();
-	}
-}
-
-void fD1797DebugOutput() {
-	// DEBUG FD-1797 Floppy Disk Controller
-	printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
-		jwd1797->rotational_byte_pointer);
-	printf("%s%d\n", "JWD1797 ROTATIONAL BYTE TIMER (ns): ",
-		jwd1797->rotational_byte_read_timer);
-	printf("%s%d\n", "JWD1797 ROTATIONAL BYTE TIMER OVR (ns): ",
-		jwd1797->rotational_byte_read_timer_OVR);
-	printf("%s%02X\n", "Current Byte: ", getFDiskByte(jwd1797));
-	printf("%s%f\n", "HEAD LOAD Timer: ", jwd1797->HLT_timer);
-	printf("%s%f\n", "E Delay Timer: ", jwd1797->e_delay_timer);
-	printf("%s", "FD-1797 Status Reg.: " );
-	print_bin8_representation(jwd1797->statusRegister);
-	printf("%s", "Disk ID Field Data: " );
-	printByteArray(jwd1797->id_field_data, 6);
-	printf("%s", "data a1 byte count: ");
-  printf("%d\n", jwd1797->data_a1_byte_counter);
-  printf("%s", "data AM search count: ");
-  printf("%d\n", jwd1797->data_mark_search_count);
-  printf("%s", "Data AM found: ");
-  printf("%d\n", jwd1797->data_mark_found);
-  printf("%s", "Sector length count: ");
-  printf("%d\n", jwd1797->intSectorLength);
-  printf("%s%d\n", "DRQ: ", jwd1797->drq);
-  printf("%s%02X\n", "DATA REGISTER: ", jwd1797->dataRegister);
-  printf("%s", "SECTOR REGISTER: ");
-  print_bin8_representation(jwd1797->sectorRegister);
-  printf("%s", "");
-  printf("%s", "TYPE II STATUS REGISTER: ");
-  print_bin8_representation(jwd1797->statusRegister);
-  printf("%s\n", "");
-}
-
-
-// ============================================================================
-														/* MAIN FUNCTIONS (ENTRY) */
-// ============================================================================
-
-// emulator thread function
-void* mainBoardThread(void* arg) {
-  // start the z100_main function defined here in mainBoard.c. This starts the
-  // actual emulation program.
-  z100_main();
-}
-
-// MAIN FUNCTION - ENTRY
-int main(int argc, char* argv[]) {
-
-	printf("\n\n%s\n\n",
-		" ===================================\n"
-		" |\tZENITH Z-100 EMULATOR\t   |\n"
-		" |\tby: Joe Matta\t\t   |\n"
-		" |\t8/2020 - 4/2021\t\t   |\n"
-		" ===================================");
-
-  char user_input_string[100];
-  char valid_enter_key_press;
-	debug_mode = '0';
-  /* user chooses DEBUG mode */
-  // loop until a valid entry is input by the user ('1', '2', or '3')
-  while(1) {
-    printf("%s", "\nChoose a mode:\n\n  1. Normal\n  2. DEBUG\n  3. EXIT\n\n>> ");
-    fgets(user_input_string, 100, stdin);
-    // check that the first character in the user's entry is '1', '2', or '3'
-    // also check that only one character was entered followed by a '\n'
-    if((user_input_string[0] < '1' || user_input_string[0] > '3') ||
-      user_input_string[1] != '\n') {
-      printf("%s\n", "INVALID ENTRY!\n");
-      // back to top of loop to reprint menu
-      continue;
-    }
-    /* entry valid - terminate loop with user_input_string[0] holding user's
-    menu choice */
-    break;
-  }
-
-  // process user choice
-  switch(user_input_string[0]) {
-    case '1' :
-      debug_mode = '0';
-      printf("%s\n\n", "\nNORMAL MODE");
-      break;
-    case '2' :
-      printf("%s\n\n", "\nDEBUG MODE");
-			while(1) {
-				// check that the first character in the user's entry is '1' or '2'
-		    // also check that only one character was entered followed by a '\n'
-		    printf(
-					"%s", "\nChoose a DEBUG mode:\n\n  1. Break at Instruction number\n  "
-					"2. Break at Instruction Pointer (IP) value\n  3. EXIT\n\n>> ");
-		    fgets(user_input_string, 100, stdin);
-				if((user_input_string[0] < '1' || user_input_string[0] > '3') ||
-		      user_input_string[1] != '\n') {
-		      printf("%s\n", "INVALID ENTRY!\n");
-		      // back to top of loop to reprint menu
-		      continue;
-		    }
-				break;
-			}
-
-      debug_mode = user_input_string[0];
-
-			switch(debug_mode) {
-				case '1' :
-					while(1) {
-		        printf("\nEnter an INSTRUCTION NUMBER to break at (integer >= 0).\n");
-		        printf("%s", "(Negative integers will give undesired break points.)\n\n>> ");
-		        fgets(user_input_string, 100, stdin);
-		        // https://stackoverflow.com/questions/4072190/check-if-input-is-integer-type-in-c
-		        if(sscanf(user_input_string, "%lu%c", &breakAtInstruction, &valid_enter_key_press) != 2 ||
-		          valid_enter_key_press != '\n') {
-	            printf("INVALID ENTRY: Enter a valid integer greater or equal to 0 (zero)!\n");
-	            // back to top of loop to display prompt again
-	            continue;
-		        }
-		        // valid entry - break from loop
-		        break;
-		      }
-		  		break;
-				case '2' :
-					while(1) {
-						printf("\nEnter an INSTRUCTION POINTER (IP) value to break at"
-							" (hexadecimal value without \"0x\" >= 0. MAX 8 hex digits).\n");
-						printf("%s", "(Negative values will give undesired break points.)\n\n>> ");
-						fgets(user_input_string, 100, stdin);
-						// convert hex string to int
-						int ip_break_at = hex2int(user_input_string);
-						// https://stackoverflow.com/questions/4072190/check-if-input-is-integer-type-in-c
-						if(ip_break_at == -1) {
-							printf("INVALID ENTRY: Enter a valid hex value greater or equal to 0 (zero)!\n");
-							// back to top of loop to display prompt again
-							continue;
-						}
-						// valid entry - break from loop
-						breakAtInstruction = ip_break_at;
-						break;
-					}
-					break;
-				case '3' :
-		      printf("%s\n", "\nEXITING Z-100 EMULATOR PROGRAM...\n");
-		      exit(0);
-		      break;
-		    default :
-		      printf("\nERROR - undefined behavior - EXITING Z-100 EMULATOR PROGRAM...\n\n" );
-		      exit(0);
-			}
-			break;
-    case '3' :
-      printf("%s\n", "\nEXITING Z-100 EMULATOR PROGRAM...\n");
-      exit(0);
-      break;
-    default :
-      printf("\nERROR - undefined behavior - EXITING Z-100 EMULATOR PROGRAM...\n\n" );
-      exit(0);
-  }
-
-  // allocate memory for array and initialize each pixel element to 0
-  // (uses generateScreen() function from video.c to set up the pixel array)
-  pixels = generateScreen();
-  // call initialization function defined in screen.c to set up a gtk window
-  screenInit(&argc, &argv);
-  // start main emulator thread
-  pthread_create(&emulator_thread, NULL, mainBoardThread, NULL);
-  // start GTK window thread
-  screenLoop();
 }

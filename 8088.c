@@ -92,7 +92,7 @@ unsigned int fetch_x86(P8088* p8088)
 
 void trap(P8088* p8088, unsigned int number)
 {
-	printf("%s\n", "** INTERRUPT SENT TO 8088 TRAP **");
+	// printf("%s\n", "** INTERRUPT SENT TO 8088 TRAP **");
 	unsigned int flags=(p8088->o<<11)|(p8088->d<<10)|(p8088->i<<9)|(p8088->t<<8)|(p8088->s<<7)|(p8088->z<<6)|(p8088->ac<<4)|(p8088->p<<2)|(p8088->c<<0);
 	unsigned int cs=p8088->CS;
 	unsigned int ip=p8088->IP;
@@ -126,7 +126,7 @@ void reset8088(P8088* p8088)
 	p8088->c=p8088->p=p8088->ac=p8088->z=p8088->s=p8088->t=p8088->i=p8088->d=p8088->o=0;
 	p8088->halt=0;
 	p8088->name_opcode="";
-	p8088->data_request_x86_=0;
+	p8088->ready_x86_=0;
 	p8088->wait_state_x86=0;
 	prefetch_flush(p8088);
 }
@@ -521,7 +521,7 @@ void check_wait_state_x86(P8088* p8088) {
 	}
 	/* mainBoard.c function - glue logic for FD-1797 Floppy Disk Controller */
 	if(pr8088_FD1797WaitStateCondition(pre_check_byte_1, pre_check_byte_2) &&
-		p8088->data_request_x86_ == 0) {
+		p8088->ready_x86_ == 0) {
 		p8088->wait_state_x86 = 1;
 	}
 	else {

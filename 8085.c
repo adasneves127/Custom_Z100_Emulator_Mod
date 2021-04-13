@@ -59,7 +59,7 @@ void check_wait_state(P8085* p8085) {
 	unsigned int pre_check_byte_2=z100_memory_read_(p8085->PC+1);
 	/* mainBoard.c function - glue logic for FD-1797 Floppy Disk Controller */
 	if(pr8085_FD1797WaitStateCondition(pre_check_byte_1, pre_check_byte_2) &&
-		p8085->data_request_ == 0) {
+		p8085->ready_ == 0) {
 		p8085->wait_state = 1;
 	}
 	else {
@@ -91,7 +91,7 @@ void doInstruction8085(P8085* p8085)
 	if(p8085->halted) {p8085->cycles=1; return;}
 
 	check_wait_state(p8085);
-	if(p8085->wait_state) {p8085->cycles=1; return;}
+	if(p8085->wait_state) {return;}
 
 	// if not halted or wait_state, continue with executing instruction
 	unsigned int cyc=0;

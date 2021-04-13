@@ -11,7 +11,7 @@ typedef struct
 
 	/* signal for external device data read request (used for FD-1797 Floppy Disk
 		controller */
-	int data_request_;
+	int ready_;
 
 	int wait_state;
 
