@@ -243,9 +243,9 @@ int z100_main() {
 
 		/* cycle the JWD1797. The JWD1797 is driven by a 1 MHz clock in the Z-100.
 			Thus, it should be cycled every 1 microsecond or every five CPU (5 MHz)
-			cycles. Considering it will be cycled after every instruction, the time
-			added to the internal JWD1797 timer mechanisms will be determined by
-			how many cycles the previous instruction took.
+			cycles. Instead, time slices added to the internal JWD1797 timer
+			mechanisms will be determined by how many cycles the previous instruction
+			took.
 		*/
 		doJWD1797Cycle(jwd1797, last_instruction_time_us);
 

@@ -342,14 +342,10 @@ void writeJWD1797(JWD1797* jwd_controller, unsigned int port_addr, unsigned int 
 	}
 }
 
-/* clocks the WD1797 chip (Z-100 uses a 1 MHz clock)
-	a cycle should happen every 0.000001 seconds - every 1 microsecond
-  main program will add the amount of calculated time from the previous
+/* main program will add the amount of calculated time from the previous
 	instruction to the internal WD1797 timers */
 void doJWD1797Cycle(JWD1797* w, double us) {
 	w->master_timer += us;	// @@@ DEBUG clock @@@
-	// printf("%s%lu\n", "JWD1797 ROTATIONAL BYTE POINTER: ",
-	// 	w->rotational_byte_pointer);
 
 	/* update status register bit 7 (NOT READY) based on inverted not_master_reset
 		or'd with inverted ready_pin (ALL COMMANDS) */
@@ -373,7 +369,7 @@ void doJWD1797Cycle(JWD1797* w, double us) {
 			// reset BUSY status bit ONLY - other status bits are unchanged
 			w->statusRegister &= 0b11111110;
 		}
-		else {	// NO command running
+		else {									// NO command running
 			/* reset busy status and clear SEEK ERROR and CRC ERROR bits
 				(reflect TYPE I status) */
 			w->statusRegister &= 0b11100110; // reset NOT READY bit
@@ -419,7 +415,6 @@ void doJWD1797Cycle(JWD1797* w, double us) {
 		// advance to next rotational byte (go to 0 if back to start of track)
 		w->rotational_byte_pointer =
 			(w->rotational_byte_pointer + 1) % w->actual_num_track_bytes;
-		// printf("%lu\n", w->rotational_byte_pointer);
 		// when the first byte of the track is read, signal the start of the index pulse
 		if(w->rotational_byte_pointer == 0) {
 			w->track_start_signal_ = 1;
