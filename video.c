@@ -116,11 +116,11 @@ void renderScreen(Video* v, unsigned int* pixels) {
 				for(int bit = 0; bit < 8; bit++) {
 					// each color plane exists in three consecutive 64K (0x10000) VRAM pages
 					// the value for blue, red, and green will be either 1 or 0
-					int blue = (v->vram[(raw_addr+(v->addressLatch*128*16*0))&0xffff]>>bit)&1;
+					int blue = (v->vram[raw_addr]>>bit)&1;
 					if(!v->blueenabled) blue=0;
-					int red = (v->vram[((raw_addr+(v->addressLatch*128*16*0))&0xffff)+0x10000]>>bit)&1;
+					int red = (v->vram[raw_addr+0x10000]>>bit)&1;
 					if(!v->redenabled) red=0;
-					int green = (v->vram[((raw_addr+(v->addressLatch*128*16*0))&0xffff)+0x20000]>>bit)&1;
+					int green = (v->vram[raw_addr+0x20000]>>bit)&1;
 					if(!v->greenenabled) green=0;
 					/* flash enabled mode turns all pixel colors on and ignores the
 					contents of VRAM */
