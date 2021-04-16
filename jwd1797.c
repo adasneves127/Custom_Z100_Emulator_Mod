@@ -25,7 +25,7 @@
 #define INDEX_HOLE_PULSE_US 100.0
 // head load timing (this can be set from 30-100 ms, depending on drive)
 // set to 45 ms (45,000 us)
-#define HEAD_LOAD_TIMING_LIMIT 45.0*1000
+#define HEAD_LOAD_TIMING_LIMIT 55.0*1000
 // verify time is 30 milliseconds for a 1MHz clock
 #define VERIFY_HEAD_SETTLING_LIMIT 30.0*1000
 // E (15 ms delay) for TYPE II and III commands (30 ms (30*1000 us) for 1 MHz clock)
@@ -1401,8 +1401,8 @@ void handleHLTTimer(JWD1797* w, double time) {
 }
 
 void updateControlStatus(JWD1797* w) {
-	// set busy bit 0 based on status register bit 0
-	w->controlStatus = (w->intrq & 1) | ((0x01 & 1) << 1) | ((w->drq & 1) << 7);
+	// set INTRQ bit 0 and DRQ bit 7
+	w->controlStatus = (w->intrq & 1) | ((w->drq & 1) << 7);
 }
 
 // http://www.cplusplus.com/reference/cstdio/fread/
