@@ -530,12 +530,12 @@ void updateZ100Screen() {
 void handleDebugOutput() {
 	if((debug_mode == '1' && (instructions_done >= breakAtInstruction)) ||
 		(debug_mode_2_active == 1)) {
-		// printf("\n");
 		printf("instructions done: %ld\n", instructions_done);
 		printf("%s%f\n", "last instruction time (us): ", last_instruction_time_us);
 		printf("TOTAL TIME ELAPSED (us): %f\n", total_time_elapsed);
 		// fD1797DebugOutput();
-		getchar();
+
+		while(getchar() != '\n') {};
 	}
 }
 

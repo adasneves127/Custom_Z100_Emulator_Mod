@@ -1402,7 +1402,7 @@ void handleHLTTimer(JWD1797* w, double time) {
 
 void updateControlStatus(JWD1797* w) {
 	// set INTRQ bit 0 and DRQ bit 7
-	w->controlStatus = (w->intrq & 1) | ((w->drq & 1) << 7);
+	w->controlStatus = (w->intrq & 1) | ((0x01 & 1) << 1) | ((w->drq & 1) << 7);
 }
 
 // http://www.cplusplus.com/reference/cstdio/fread/
