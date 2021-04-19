@@ -67,6 +67,7 @@ unsigned char io_diag_port_F6; // not needed without external diag device
 unsigned char debug_test_port;
 unsigned char debug_timer2;
 unsigned char debug_int6;
+int tkp_debug;
 
 unsigned char rom[ROM_SIZE];
 unsigned char ram[RAM_SIZE];
@@ -107,6 +108,8 @@ void handle8253TimerClockCycle();
 void updateZ100Screen();
 void handleDebugOutput();
 void fD1797DebugOutput();
+
+void loadimage();
 
 /*
  ============== MAIN Z100 FUNCTION ==============
@@ -208,6 +211,7 @@ int z100_main() {
 	debug_test_port = 0x00;
 	debug_timer2 = 0x00;
 	debug_int6 = 0x00;
+	tkp_debug = 0;
   /*
 	 >>>> RUN THE PROCESSORS <<<<
 	*/
@@ -257,6 +261,10 @@ int z100_main() {
     /* if debug mode is active, wait for enter key to continue after each
     instruction */
 		handleDebugOutput();
+
+		if(instructions_done == 1797613) {
+			// loadimage();
+		}
   }
   // return from z100_main() (will not return because of processor loop)
   return 0;
@@ -377,14 +385,26 @@ void handleDebug2Mode() {
 	// 		debug_mode_2_active = 1;
 	// }
 
-	// if(jwd1797->intrq == 1 && debug_test_port == 0x14 && debug_timer2 == 1) {
-	// 		debug_mode_2_active = 1;
-	// }
+	if(jwd1797->intrq == 1 && debug_test_port == 0x14 && debug_timer2 == 1) {
+			// debug_mode_2_active = 1;
+	}
+
+	// 02 01 01 02 01 01 ********* 18 to Z-207 Primary Floppy Drive Controller CNTRL Control Port B4
+
+	if(p8088->CS==0x40 && p8088->IP == 0x817) {
+		// debug_mode_2_active = 1;
+	}
 
 	// HARDCODE AL REGISTER TO GET PAST Z-DOS INTERRUPT LOOP
 	if(p8088->IP == 0xECF) {
-		// p8088->AL = 0x00;
+		// p8088->AL = 0xFF;
 	}
+
+	// debug to get to "Error LOADING COMMAND.COM"
+	if(p8088->IP == 0xED6) {
+		p8088->z = 0;
+	}
+
 	/* DEBUG: This condition is used to check interrupts' effect on Z-dos
 	infinite loop */
 	if(p8088->IP == 0xEE7) {
@@ -870,6 +890,7 @@ unsigned int z100_port_read(unsigned int address) {
       // Z-207 Primary Floppy Drive Controller CNTRL Control Port
       printf("reading from Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
         address);
+			printf("CS = %X IP = %X\n", p8088->CS, p8088->IP);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB5:
@@ -1074,6 +1095,7 @@ void z100_port_write(unsigned int address, unsigned char data) {
       // Z-207 Primary Floppy Drive Controller CNTRL Control Port
       printf("writing %X to Z-207 Primary Floppy Drive Controller CNTRL Control Port %X\n",
         data, address);
+			printf("CS = %X IP = %X\n", p8088->CS, p8088->IP);
       writeJWD1797(jwd1797, address, data&0xff);
       break;
     case 0xB5:
@@ -1201,8 +1223,10 @@ void z100_port_write(unsigned int address, unsigned char data) {
       // if parity checking circuitry is enabled with a 1 written to bit 5 and
       // killParity variable is a 1 which means the circuitry is off (actual hardware
       // memory control port bit 5 = 0)
+			tkp_debug = tokillparity;
 			if(!tokillparity && killParity) {
 				printf("CLEAR PARITY ERROR\n");
+				printf("CS = %X IP = %X\n", p8088->CS, p8088->IP);
 				e8259_set_irq0(e8259_master, 0);
 			}
 			killParity = tokillparity;
@@ -1266,4 +1290,53 @@ void z100_port_write(unsigned int address, unsigned char data) {
   		printf("WRITING %X TO UNIMPLEMENTED PORT %X\n", data, address);
       break;
   }
+}
+
+void loadimage()
+{
+	const char* name="z100_memdmp.bin";
+	FILE* f=fopen(name,"rb");
+	for(int i=0; i<RAM_SIZE; i++)
+		ram[i]=fgetc(f)&0xff;
+	// for(int i=0; i<0x30000; i++)
+	// 	video->vram[i]=fgetc(f)&0xff;
+/*	for(int i=0; i<0x10000-0x2000; i++)
+		fgetc(f);
+	for(int i=0; i<0x2000; i++)
+	{
+		int r=fgetc(f);
+		printf("%x ",r);
+		rom[i]=r&0xff;
+	}
+*/
+//	p8088->AX=0x0000;
+//	p8088->BX=0x0000;
+//	p8088->CX=0x007A;
+//	p8088->DX=0x0000;
+	p8088->AH=0x00;
+	p8088->BH=0x00;
+	p8088->CH=0x00;
+	p8088->DH=0x00;
+	p8088->AL=0x00;
+	p8088->BL=0x00;
+	p8088->CL=0x7A;
+	p8088->DL=0x00;
+	p8088->SP=0x0064;
+	p8088->BP=0x0000;
+	p8088->SI=0x0010;
+	p8088->DI=0x0000;
+	p8088->DS=0x0000;
+	p8088->ES=0x08E9;
+	p8088->SS=0x08EA;
+	p8088->CS=0x08E2;
+//	p8088->CS=0x0734;
+	p8088->IP=0x0061;
+	p8088->o=0;
+	p8088->d=0;
+	p8088->i=1;
+	p8088->s=0;
+	p8088->z=1;
+	p8088->ac=0;
+	p8088->p=1;
+	p8088->c=1;
 }

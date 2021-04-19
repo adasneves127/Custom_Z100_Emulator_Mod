@@ -780,6 +780,7 @@ void commandStep(JWD1797* w, double us) {
 					else {w->statusRegister &= 0b11111011;}
 					// read current byte into data register
 					w->dataRegister = getFDiskByte(w);
+					printf("%X ", w->dataRegister);
 					// set drq and status drq status bit
 					w->drq = 1;
 					w->statusRegister |= 0b00000010;
