@@ -389,20 +389,24 @@ void handleDebug2Mode() {
 			// debug_mode_2_active = 1;
 	}
 
-	// 02 01 01 02 01 01 ********* 18 to Z-207 Primary Floppy Drive Controller CNTRL Control Port B4
-
+	// to get past interrupt loop and see the "Error loading COMMAND.COM"
 	if(p8088->CS==0x40 && p8088->IP == 0x817) {
 		// debug_mode_2_active = 1;
 	}
 
-	// HARDCODE AL REGISTER TO GET PAST Z-DOS INTERRUPT LOOP
+	// DEBUG Interrupt loop that hangs in COMMAND.COM loading process
 	if(p8088->IP == 0xECF) {
-		// p8088->AL = 0xFF;
+		// debug_mode_2_active = 1;
 	}
 
 	// debug to get to "Error LOADING COMMAND.COM"
 	if(p8088->IP == 0xED6) {
-		p8088->z = 0;
+		// p8088->z = 0;
+	}
+
+	// debug to get to "Error LOADING COMMAND.COM"
+	if(p8088->IP == 0xEEA) {
+		// p8088->c = 1;
 	}
 
 	/* DEBUG: This condition is used to check interrupts' effect on Z-dos
