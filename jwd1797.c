@@ -156,6 +156,7 @@ void resetJWD1797(JWD1797* jwd_controller) {
 	jwd_controller->rotational_byte_read_timer_OVR = 0; // NANOSECONDS
 	jwd_controller->HLD_idle_reset_timer = 0.0;
 	jwd_controller->HLT_timer = 0.0;
+	jwd_controller->read_track_bytes_read = 0;
 
 	jwd_controller->index_pulse_pin = 0;
 	jwd_controller->ready_pin = 1;	// make drive ready immediately after reset
@@ -930,7 +931,7 @@ void commandStep(JWD1797* w, double us) {
 			if(w->new_byte_read_signal_) {
 				/* is there an index pulse? Wait until after GAP 4a has passed (80 x 0x4E)
 					before starting to look for another index pulse */
-				if((w->rotational_byte_pointer > 80) && (w->index_pulse_pin)) {
+				if((w->read_track_bytes_read > 80) && (w->index_pulse_pin)) {
 					// command is done
 					w->command_done = 1;
 					w->statusRegister &= 0b11111110;	// reset (clear) busy status bit
@@ -948,6 +949,8 @@ void commandStep(JWD1797* w, double us) {
 				else {w->statusRegister &= 0b11111011;}
 				// read current byte into data register
 				w->dataRegister = getFDiskByte(w);
+				// read track takes up a new byte
+				w->read_track_bytes_read++;
 				// set drq and status drq status bit
 				w->drq = 1;
 				w->statusRegister |= 0b00000010;
@@ -1247,6 +1250,7 @@ void setTypeIIICommand(JWD1797* w) {
 		w->currentCommandName = "READ TRACK";
 		printf("%s command in WD1797 command register\n", w->currentCommandName);
 		w->start_track_read_ = 0;
+		w->read_track_bytes_read = 0;
 	}
 	// WRITE TRACK
 	else if(cmdID == 15) {

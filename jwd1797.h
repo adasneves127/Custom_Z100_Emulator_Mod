@@ -81,6 +81,8 @@ unsigned int rotational_byte_read_timer;
 unsigned int rotational_byte_read_timer_OVR;
 double HLD_idle_reset_timer;
 double HLT_timer;
+// *
+unsigned int read_track_bytes_read;
 
 // DRIVE pins
 int index_pulse_pin;
