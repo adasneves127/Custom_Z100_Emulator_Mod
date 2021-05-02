@@ -234,7 +234,7 @@ int z100_main() {
 
     /* simulate VSYNC interrupt on I6 (keyboard video display and light pen int)
 			roughly every 10,000 instructions - This satisfies BIOS diagnostics,
-			but the interrupt routine is not used to display the Z-100 screen
+			but the interrupt routine is not used to update the Z-100 display
 		*/
     simulateVSYNCInterrupt();
 
@@ -350,8 +350,6 @@ int pr8085_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num
 
 int pr8088_FD1797WaitStateCondition(unsigned char opCode, unsigned char port_num) {
 	// if 8088 "in" instruction and reading from WD1797 data register (port 0xB3)
-	/* MUST ALSO INCLUDE PORT 0xB5!! COMPUTER MUST WAIT FOR AN INTRQ signal from
-		FD-1797 when reading the status port dusring the SEEK command! */
 	if(((opCode == 0xe4) || (opCode == 0xe5) || (opCode == 0xec) || (opCode == 0xed))
 		&& (port_num == 0xb3)) {
 		return 1;
