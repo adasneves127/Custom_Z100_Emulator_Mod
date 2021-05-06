@@ -866,8 +866,8 @@ unsigned int z100_port_read(unsigned int address) {
     /* FD179X-02 Floppy Disk Formatter/Controller (0xB0-0xB5) */
     case 0xB0:
       // Z-207 Primary Floppy Drive Controller Status Port
-      // printf("reading from Z-207 Primary Floppy Drive Controller Status Port %X\n",
-      // address);
+      printf("reading from Z-207 Primary Floppy Drive Controller Status Port %X\n",
+      	address);
       return_value = readJWD1797(jwd1797, address);
       break;
     case 0xB1:
@@ -982,6 +982,18 @@ unsigned int z100_port_read(unsigned int address) {
       // 8253 timer control port
       // printf("reading from 8253 control port %X\n", address);
       return_value = e8253_get_uint8(e8253, address&3)&0xff;
+      break;
+		case 0xEB:
+      // Serial A (printer port)
+      // printf("reading from Serial A printer port %X\n", address);
+			// DEBUG
+      return_value = debug_test_port;
+      break;
+		case 0xEF:
+      // Serial B (modem port)
+      // printf("reading from Serial B modem port %X\n", address);
+			// DEBUG
+      return_value = 0x00;
       break;
     // read IRR register of 8259 slave interrupt controller (PIC)
     case 0xF0:
@@ -1166,23 +1178,29 @@ void z100_port_write(unsigned int address, unsigned char data) {
       break;
     case 0xE4:
       // 8253 timer counter 0
-      // printf("writing %X to 8253 timer counter 0 port %X\n", data, address);
+      printf("writing %X to 8253 timer counter 0 port %X\n", data, address);
       e8253_set_uint8(e8253, address&3, data&0xff);
       break;
     case 0xE5:
       // 8253 timer counter 1
-      // printf("writing %X to 8253 timer counter 1 port %X\n", data, address);
+      printf("writing %X to 8253 timer counter 1 port %X\n", data, address);
       e8253_set_uint8(e8253, address&3, data&0xff);
       break;
     case 0xE6:
       // 8253 timer counter 2
-      // printf("writing %X to 8253 timer counter 2 port %X\n", data, address);
+      printf("writing %X to 8253 timer counter 2 port %X\n", data, address);
       e8253_set_uint8(e8253, address&3, data&0xff);
       break;
     case 0xE7:
       // 8253 timer control port
-      // printf("writing %X to 8253 timer control port %X\n", data, address);
+      printf("writing %X to 8253 timer control port %X\n", data, address);
       e8253_set_uint8(e8253, address&3, data&0xff);
+      break;
+		case 0xEB:
+      // Serial A (printer port)
+      printf("writing %X to Serial A printer port %X\n", data, address);
+			// DEBUG
+      debug_test_port = data;
       break;
 		case 0xEF:
       // Serial B (modem port)
@@ -1192,7 +1210,7 @@ void z100_port_write(unsigned int address, unsigned char data) {
       break;
     case 0xFB:
       // 8253 timer status port
-      // printf("writing %X to 8253 timer status port %X\n", data, address);
+      printf("writing %X to 8253 timer status port %X\n", data, address);
       e8253_set_status(e8253, data&0xff);
       break;
     // memory control latch port FC;
